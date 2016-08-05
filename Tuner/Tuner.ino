@@ -1,7 +1,7 @@
 /*
 
 Arduino chromatic guitar tuner.
-2008 Frederic Hamel
+2008-2016 Frederic Hamel
 
 As a modified version of the Arduino core library, the LiquidCrystal class is licensed under the LGPL.
 See attached license.
@@ -43,14 +43,14 @@ http://recherche.ircam.fr/equipes/pcm/cheveign/pss/2002_JASA_YIN.pdf
 #endif 
 
 // from pins_arduino.h
-#define NOT_ON_TIMER 0
-#define TIMER0A 1
-#define TIMER0B 2
-#define TIMER1A 3
-#define TIMER1B 4
-#define TIMER2  5
-#define TIMER2A 6
-#define TIMER2B 7
+// #define NOT_ON_TIMER 0
+// #define TIMER0A 1
+// #define TIMER0B 2
+// #define TIMER1A 3
+// #define TIMER1B 4
+// #define TIMER2  5
+// #define TIMER2A 6
+// #define TIMER2B 7
 //extern const uint8_t PROGMEM port_to_input_PGM[];
 extern const uint8_t PROGMEM digital_pin_to_port_PGM[];
 extern const uint8_t PROGMEM digital_pin_to_bit_mask_PGM[];
@@ -419,7 +419,7 @@ public:
 private:
 	int m_pin;
 	int m_lastValue;
-	long m_debounceStart;
+	unsigned long m_debounceStart;
 	bool m_activeLow;
 	bool m_justPressed;
 	bool m_justReleased;
@@ -448,7 +448,7 @@ PushButton g_modeButton(kModeButtonPin);
 // A	220		72727.27
 
 static int const NUM_NOTES = 13;
-static char* g_noteNames[NUM_NOTES] =
+static const char* g_noteNames[NUM_NOTES] =
 {
 	"A ",
 	"A#",
@@ -591,6 +591,15 @@ static int const FIXED_MASK_HI = ~((1 << FIXED_SHIFT_HI) - 1);
 // with free-standing variables, not members.)
 template<int N> struct PrintInt;
 
+// This is a very naive way of writing a static assertion facility, but avr-gcc is *very* far from compliant - it
+// will allow all sorts of illegal constructs - and my patience is running out. :P  Even though this will generate
+// a bit of code, it can hopefully be trivially stripped.
+#define STATIC_ASSERT3(x, line) void func##line(static_assert_<x>) { }
+#define STATIC_ASSERT2(x, line) STATIC_ASSERT3(x, line)
+#define STATIC_ASSERT(x) STATIC_ASSERT2(x, __LINE__)
+template <bool N> struct static_assert_;
+template<> struct static_assert_<true> {};
+
 // Linearly interpolates between two 8-bit signed values.
 char InterpolateChar(char a, char b, char tFrac)
 {
@@ -619,9 +628,13 @@ public:
 		, m_lcd(2, 3, 4, 5, 6, 7, 8)
 #endif
 		, m_midiNote(-1)
-		, m_a440(440.0f)
+		, m_tunerNote(-1)
+		, m_maxAmplitude(-1)
+		, m_lastMaxAmplitude(-1)
 		, m_mode(TunerMode::Tuner)
+		, m_newMidiNote(false)
 	{
+		m_a440.f = 440.0f;
 #if ENABLE_LCD
 		g_lcd = &m_lcd;
 #endif
@@ -753,12 +766,12 @@ public:
 
 	void SaveTuning()
 	{
-		SaveEepromLong(0, *((unsigned long*) &m_a440));
+		SaveEepromLong(0, m_a440.ul);
 	}
 
 	void LoadTuning()
 	{
-		*((unsigned long*) &m_a440) = LoadEepromLong(0);
+		m_a440.ul = LoadEepromLong(0);
 	}
 
 	// The following two functions require proper setup in Start()
@@ -784,7 +797,7 @@ public:
 	}
 
 	// Given a MIDI note index, get the name of the note as ASCII.
-	char* GetNoteName(int note)
+	const char* GetNoteName(int note)
 	{
 		if (note >= 0)
 		{
@@ -807,7 +820,7 @@ public:
 		frequency *= QUARTERTONE_DOWN; // kind of like rounding the note, half a semitone (it's a multiplication because of logarithmic space)
 
 		int note = A440_NOTE;
-		float a440 = m_a440;
+		float a440 = m_a440.f;
 		float a440_2 = 2.0f * a440;
 		while (frequency < a440)
 		{
@@ -835,7 +848,7 @@ public:
 			return -1.0f;
 		}
 
-		float result = m_a440;
+		float result = m_a440.f;
 		
 		while (note < A440_NOTE)
 		{
@@ -1113,24 +1126,24 @@ public:
 			bool buttonPressed = firstTime;
 			if (g_pitchDownButton.JustPressed())
 			{
-				m_a440 -= 1.0f;
+				m_a440.f -= 1.0f;
 				buttonPressed = true;
 			}
 
 			if (g_pitchUpButton.JustPressed())
 			{
-				m_a440 += 1.0f;
+				m_a440.f += 1.0f;
 				buttonPressed = true;
 			}
 
-			if (m_a440 < MIN_FREQUENCY)
+			if (m_a440.f < MIN_FREQUENCY)
 			{
-				m_a440 = MIN_FREQUENCY;
+				m_a440.f = MIN_FREQUENCY;
 			}
 
-			if (m_a440 > MAX_FREQUENCY)
+			if (m_a440.f > MAX_FREQUENCY)
 			{
-				m_a440 = MAX_FREQUENCY;
+				m_a440.f = MAX_FREQUENCY;
 			}
 
 			if (buttonPressed)
@@ -1138,7 +1151,7 @@ public:
 				lastPress = millis();
 				m_lcd.clear();
 				m_lcd.print("A = ");
-				PrintFloat(m_a440, 2);
+				PrintFloat(m_a440.f, 2);
 				m_lcd.print(" Hz   ");
 			}
 
@@ -1152,7 +1165,6 @@ public:
 	{
 		Start();
 
-		int i = 0;
 		float filteredFrequency = -1.0f;
 		int noteRepeatCount = 0;
 
@@ -1174,6 +1186,7 @@ public:
 				switch (m_mode)
 				{
 				case TunerMode::Midi: NoteOff(); break;
+				default: break;
 				}
 
 				// Cycle modes
@@ -1188,6 +1201,8 @@ public:
 						m_newMidiNote = false;
 						m_lastMaxAmplitude = 0;
 					}
+					break;
+				default: 
 					break;
 				}
 			}
@@ -1294,6 +1309,8 @@ public:
 					}
 				}
 				break;
+			default:
+				break;
 			}
 #endif
 		}
@@ -1307,7 +1324,14 @@ private:
 	LiquidCrystal m_lcd;
 #endif
 	int m_lastLcdTickX;
-	float m_a440;
+	
+	union
+	{
+		unsigned long ul;
+		float f;
+	} m_a440;
+	STATIC_ASSERT(sizeof(unsigned long) == sizeof(float)); // verify that things match up for the above union
+	
 	int m_midiNote;
 	int m_tunerNote;
 	int m_maxAmplitude;
@@ -1315,6 +1339,7 @@ private:
 	TunerMode::Type m_mode;
 	bool m_newMidiNote;
 };
+
 #undef ALWAYSPRINT
 #undef DEBUGPRINT
 
