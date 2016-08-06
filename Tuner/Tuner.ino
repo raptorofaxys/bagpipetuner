@@ -55,6 +55,10 @@ extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
 #define ENABLE_PRINT 1
 #define ENABLE_LCD 1
 
+#define EQUAL_TEMPERAMENT 1
+#define JUST_TEMPERAMENT 2
+#define TEMPERAMENT JUST_TEMPERAMENT
+
 static int const kStatusPin = 13;
 static int const kStatusPin2 = 12;
 static int const kPitchDownButtonPin = 9;
@@ -560,10 +564,37 @@ WideGlyph g_noteGlyphs[7] =
 
 static int const A440_NOTE = 69;
 static int const A880_NOTE = A440_NOTE + 12;
+
+float const FREQUENCY_FILTER_WINDOW_RATIO_UP = 1.03f; 
+float const FREQUENCY_FILTER_WINDOW_RATIO_DOWN = 1.0f / FREQUENCY_FILTER_WINDOW_RATIO_UP; 
+
+#if (TEMPERAMENT == EQUAL_TEMPERAMENT)
 float const QUARTERTONE_UP = 1.0293022366f;
 float const QUARTERTONE_DOWN = 0.9715319412f;
 float const SEMITONE_UP = 1.0594630944f;
 float const SEMITONE_DOWN = 0.9438743127f;
+#elif (TEMPERAMENT == JUST_TEMPERAMENT)
+float g_noteSemitoneRatio[] =
+{
+	1.0f,
+	1.0f + 1 / 15.0f,
+	1.0f + 1 / 8.0f,
+	1.0f + 1 / 5.0f,
+	1.0f + 1 / 4.0f,
+	1.0f + 1 / 3.0f,
+	//1.0f + 7 / 20.0f,
+	1.0f + 13.0f / 32.0f,
+	1.0f + 1 / 2.0f,
+	1.0f + 3.0f / 5.0f,
+	1.0f + 2.0f / 3.0f,
+	1.0f + 3.0f / 4.0f,
+	//1.0f + 7.0 / 9.0f, 
+	//1.0f + 4.0 / 5.0f,
+	1.0f + 7.0 / 8.0f,
+};
+#else
+#error Unknown temperament!
+#endif
 
 typedef int Fixed;
 static int const FIXED_SHIFT = 5;
@@ -626,7 +657,14 @@ public:
 		, m_mode(TunerMode::Tuner)
 		, m_newMidiNote(false)
 	{
+#if (TEMPERAMENT == EQUAL_TEMPERAMENT)
 		m_a440.f = 440.0f;
+#elif (TEMPERAMENT == JUST_TEMPERAMENT)
+		m_a440.f = 479.0f;
+#else
+#error Unknown temperament!
+#endif 
+
 #if ENABLE_LCD
 		g_lcd = &m_lcd;
 #endif
@@ -801,6 +839,7 @@ public:
 		}
 	}
 
+#if (TEMPERAMENT == EQUAL_TEMPERAMENT)
 	// Converts a fundamental frequency in Hz to a MIDI note index.  Slow.
 	int GetMidiNoteIndexForFrequency(float frequency)
 	{
@@ -862,6 +901,75 @@ public:
 
 		return result;
 	}
+#elif (TEMPERAMENT == JUST_TEMPERAMENT)
+	// Converts a fundamental frequency in Hz to a MIDI note index.  Slow.
+	int GetMidiNoteIndexForFrequency(float frequency)
+	{
+		if (frequency < 0.0f)
+		{
+			return -1;
+		}
+
+		int note = A440_NOTE;
+		float a440 = m_a440.f;
+		float a440_2 = 2.0f * a440;
+		while (frequency < a440)
+		{
+			frequency *= 2.0f;
+			note -= 12;
+		}
+		while (frequency >= a440_2)
+		{
+			frequency *= 0.5f;
+			note += 12;
+		}
+
+		auto rangeIndex = 0;
+		float rangeHigh = g_noteSemitoneRatio[rangeIndex] * a440;
+		float rangeLow = -1.0f;
+		for (;;)
+		{
+			rangeLow = rangeHigh;
+			++rangeIndex;
+			rangeHigh = g_noteSemitoneRatio[rangeIndex] * a440;
+			if ((frequency >= rangeLow) && (frequency < rangeHigh))
+			{
+				break;
+			}
+			++note;
+		}
+		return note;
+	}
+
+	// Compute the fundamental frequency of a given MIDI note index.  Slow.
+	float GetFrequencyForMidiNoteIndex(int note)
+	{
+		if (note < 0.0f)
+		{
+			return -1.0f;
+		}
+
+		float result = m_a440.f;
+
+		while (note < A440_NOTE)
+		{
+			note += 12;
+			result *= 0.5f;
+		}
+
+		while (note > A880_NOTE)
+		{
+			note -= 12;
+			result *= 2.0f;
+		}
+
+		result *= g_noteSemitoneRatio[note - A440_NOTE];
+
+		return result;
+	}
+#else
+#error Unknown temperament!
+#endif // #if EQUAL_TEMPERAMENT
 
 	unsigned long GetCorrellationFactorFixed(char* buffer, Fixed fixedOffset)
 	{
@@ -1207,8 +1315,8 @@ public:
 
 			m_tunerNote = GetMidiNoteIndexForFrequency(instantFrequency);
 			float centerFrequency = GetFrequencyForMidiNoteIndex(m_tunerNote);
-			float minFrequency = centerFrequency * QUARTERTONE_DOWN;
-			float maxFrequency = centerFrequency * QUARTERTONE_UP;
+			float minFrequency = centerFrequency * FREQUENCY_FILTER_WINDOW_RATIO_DOWN;
+			float maxFrequency = centerFrequency * FREQUENCY_FILTER_WINDOW_RATIO_UP;
 
 			if (instantFrequency >= 0.0f)
 			{
