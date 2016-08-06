@@ -43,14 +43,6 @@ http://recherche.ircam.fr/equipes/pcm/cheveign/pss/2002_JASA_YIN.pdf
 #endif 
 
 // from pins_arduino.h
-// #define NOT_ON_TIMER 0
-// #define TIMER0A 1
-// #define TIMER0B 2
-// #define TIMER1A 3
-// #define TIMER1B 4
-// #define TIMER2  5
-// #define TIMER2A 6
-// #define TIMER2B 7
 //extern const uint8_t PROGMEM port_to_input_PGM[];
 extern const uint8_t PROGMEM digital_pin_to_port_PGM[];
 extern const uint8_t PROGMEM digital_pin_to_bit_mask_PGM[];
