@@ -53,7 +53,7 @@ extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
 //#define portInputRegister(P) ( (volatile uint8_t *)( pgm_read_byte( port_to_input_PGM + (P))) )
 
 #define ENABLE_PRINT 1
-#define ENABLE_LCD 1
+#define ENABLE_LCD 0
 
 #define EQUAL_TEMPERAMENT 1
 #define JUST_TEMPERAMENT 2
@@ -649,7 +649,7 @@ public:
 		: m_audioPin(audioPin)
 #if ENABLE_LCD
 		, m_lcd(2, 3, 4, 5, 6, 7, 8)
-#endif
+#endif // #if ENABLE_LCD
 		, m_midiNote(-1)
 		, m_tunerNote(-1)
 		, m_maxAmplitude(-1)
@@ -667,14 +667,14 @@ public:
 
 #if ENABLE_LCD
 		g_lcd = &m_lcd;
-#endif
+#endif // #if ENABLE_LCD
 	}
 
 	~Tuner()
 	{
 #if ENABLE_LCD
 		g_lcd = NULL;
-#endif
+#endif // #if ENABLE_LCD
 	}
 
 	static int const PRESCALER = 0b00000111;
@@ -714,7 +714,7 @@ public:
 			m_lcd.setCharacterGlyph(i, g);
 		}
 		m_lcd.setCharacterGlyph(TICK_GLYPH, g_tickGlyph);
-#endif
+#endif // #if ENABLE_LCD
 
 		// Enable auto-trigger enable
 		sbi(ADCSRA, ADATE);
@@ -757,7 +757,7 @@ public:
 				delay(2000);
 			}
 		}
-#endif
+#endif // #if ENABLE_LCD
 
 		LoadTuning();
 		TunePitch();
@@ -1144,6 +1144,7 @@ public:
 
 	void RenderWideGlyphForNote(int note)
 	{
+#if ENABLE_LCD
 		if (note >= 0)
 		{
 			int nameIndex = GetNoteNameIndex(note);
@@ -1166,6 +1167,9 @@ public:
 			m_lcd.setCursor(1, 0);
 			m_lcd.print("   ");
 		}
+#else
+		(void)note;
+#endif // #if ENABLE_LCD
 	}
 
 	void PrintCenterTick()
@@ -1173,15 +1177,15 @@ public:
 #if ENABLE_LCD
 		m_lcd.setCursor(DISPLAY_WIDTH >> 1, 0);
 		m_lcd.write(TICK_GLYPH);
-#endif
+#endif // #if ENABLE_LCD
 	}
 
 	void LcdTick(float f)
 	{
+#if ENABLE_LCD
 		uint8_t tick = uint8_t(f * MAX_TICK);
 		uint8_t x = (tick / 5) + 1;
 		uint8_t glyph = tick % 5;
-#if ENABLE_LCD
 		if (x < DISPLAY_WIDTH)
 		{
 			m_lcd.setCursor(x, 1);
@@ -1193,7 +1197,9 @@ public:
 			m_lcd.write(' ');
 		}
 		m_lastLcdTickX = x;
-#endif
+#else
+		(void)f;
+#endif // #if ENABLE_LCD
 	}
 
 	void NoteOn()
@@ -1249,15 +1255,19 @@ public:
 			if (buttonPressed)
 			{
 				lastPress = millis();
+#if ENABLE_LCD
 				m_lcd.clear();
 				m_lcd.print("A = ");
 				PrintFloat(m_a440.f, 2);
 				m_lcd.print(" Hz   ");
+#endif // #if ENABLE_LCD
 			}
 
 			firstTime = false;
 		}
+#if ENABLE_LCD
 		m_lcd.clear();
+#endif // #if ENABLE_LCD
 		SaveTuning();
 	}
 
@@ -1293,7 +1303,9 @@ public:
 				m_mode = static_cast<TunerMode::Type>((m_mode + 1) % TunerMode::Max);
 				
 				// Enter new mode
+#if ENABLE_LCD
 				m_lcd.clear();
+#endif // #if ENABLE_LCD
 				switch (m_mode)
 				{
 				case TunerMode::Midi:
@@ -1309,7 +1321,7 @@ public:
 
 #if ENABLE_LCD
 			m_lcd.home();
-#endif
+#endif // #if ENABLE_LCD
 
 			float instantFrequency = DetermineSignalPitch();
 
@@ -1376,6 +1388,7 @@ public:
 				m_lastMaxAmplitude = m_maxAmplitude;
 			}
 
+#if ENABLE_LCD
 			float percent = 0.0f;
 			if (filteredFrequency < centerFrequency)
 			{
@@ -1385,7 +1398,6 @@ public:
 			{
 				percent = 0.5f + 0.5f * (filteredFrequency - centerFrequency) / (maxFrequency - centerFrequency);
 			}
-#if ENABLE_LCD
 			RenderWideGlyphForNote(m_tunerNote);
 
 			switch(m_mode)
@@ -1412,7 +1424,7 @@ public:
 			default:
 				break;
 			}
-#endif
+#endif // #if ENABLE_LCD
 		}
 
 		Stop();
@@ -1422,7 +1434,7 @@ private:
 	char m_buffer[BUFFER_SIZE];
 #if ENABLE_LCD
 	LiquidCrystal m_lcd;
-#endif
+#endif // #if ENABLE_LCD
 	int m_lastLcdTickX;
 	
 	union
