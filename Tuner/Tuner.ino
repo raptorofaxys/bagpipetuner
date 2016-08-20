@@ -1423,7 +1423,7 @@ public:
 				m_lastMaxAmplitude = m_maxAmplitude;
 			}
 
-#if ENABLE_LCD
+#if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL
 			float percent = 0.0f;
 			if (filteredFrequency < centerFrequency)
 			{
@@ -1433,6 +1433,9 @@ public:
 			{
 				percent = 0.5f + 0.5f * (filteredFrequency - centerFrequency) / (maxFrequency - centerFrequency);
 			}
+#endif // #if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL
+
+#if ENABLE_LCD
 			RenderWideGlyphForNote(m_tunerNote);
 
 			switch(m_mode)
@@ -1467,6 +1470,8 @@ public:
 			PrintStringFloat("Filtered freq", filteredFrequency);
 			Ln();
 			PrintStringFloat("MIDI note", m_tunerNote);
+			Ln();
+			PrintStringFloat("Percent note (50% is perfect)", percent);
 			Ln();
 #endif // #if PRINT_FREQUENCY_TO_SERIAL
 		}
