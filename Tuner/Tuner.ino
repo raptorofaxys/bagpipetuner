@@ -1463,8 +1463,11 @@ public:
 
 #if PRINT_FREQUENCY_TO_SERIAL
 			PrintStringFloat("Instant freq", instantFrequency);
+			Ln();
 			PrintStringFloat("Filtered freq", filteredFrequency);
+			Ln();
 			PrintStringFloat("MIDI note", m_tunerNote);
+			Ln();
 #endif // #if PRINT_FREQUENCY_TO_SERIAL
 		}
 
