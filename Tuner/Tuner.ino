@@ -52,9 +52,12 @@ extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
 #define digitalPinToTimer(P) ( pgm_read_byte( digital_pin_to_timer_PGM + (P) ) )
 //#define portInputRegister(P) ( (volatile uint8_t *)( pgm_read_byte( port_to_input_PGM + (P))) )
 
+#define ENABLE_STARTUP_MESSAGE 0
 #define ENABLE_PRINT 1
 #define ENABLE_LCD 0
 #define ENABLE_MIDI 0
+#define ENABLE_BUTTON_INPUTS 0
+#define PRINT_FREQUENCY_TO_SERIAL 1
 
 #define EQUAL_TEMPERAMENT 1
 #define JUST_TEMPERAMENT 2
@@ -366,6 +369,7 @@ void Blink(int times = 1)
 	}
 }
 
+#if ENABLE_BUTTON_INPUTS
 class PushButton
 {
 public:
@@ -421,6 +425,19 @@ private:
 	bool m_justPressed;
 	bool m_justReleased;
 };
+#else
+class PushButton
+{
+public:
+	PushButton(int, bool = true) {}
+	void Update() {}
+	bool IsPressed() { return false; }
+	bool JustPressed() { return false; }
+	bool JustReleased() { return false; }
+
+	void WaitForPress() {}
+};
+#endif // #if ENABLE_BUTTON_INPUTS
 
 PushButton g_pitchDownButton(kPitchDownButtonPin);
 PushButton g_pitchUpButton(kPitchUpButtonPin);
@@ -702,8 +719,10 @@ public:
 	{
 #if ENABLE_LCD
 		m_lcd.clear();
+#if ENABLE_STARTUP_MESSAGE
 		m_lcd.print("Hello world");
 		delay(2000);
+#endif // #if ENABLE_STARTUP_MESSAGE
 		m_lcd.clear();
 		for (int i = 0; i < CHARACTER_WIDTH; ++i)
 		{
@@ -1441,6 +1460,12 @@ public:
 				break;
 			}
 #endif // #if ENABLE_LCD
+
+#if PRINT_FREQUENCY_TO_SERIAL
+			PrintStringFloat("Instant freq", instantFrequency);
+			PrintStringFloat("Filtered freq", filteredFrequency);
+			PrintStringFloat("MIDI note", m_tunerNote);
+#endif // #if PRINT_FREQUENCY_TO_SERIAL
 		}
 
 		Stop();
