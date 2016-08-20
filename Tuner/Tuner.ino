@@ -54,6 +54,7 @@ extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
 
 #define ENABLE_PRINT 1
 #define ENABLE_LCD 0
+#define ENABLE_MIDI 0
 
 #define EQUAL_TEMPERAMENT 1
 #define JUST_TEMPERAMENT 2
@@ -1204,13 +1205,16 @@ public:
 
 	void NoteOn()
 	{
+#if ENABLE_MIDI
 		Serial.write(0x90); // note on, channel 0
 		Serial.write(char(m_midiNote));
 		Serial.write(0x40); // velocity 64
+#endif // #if ENABLE_MIDI
 	}
 
 	void NoteOff()
 	{
+#if ENABLE_MIDI
 		if (m_midiNote >= 0)
 		{
 			Serial.write(0x80); // note off, channel 0;
@@ -1218,6 +1222,7 @@ public:
 			Serial.write(0x7F); // velocity 127
 			m_midiNote = -1;
 		}
+#endif // #if ENABLE_MIDI
 	}
 
 	void TunePitch()
@@ -1271,6 +1276,11 @@ public:
 		SaveTuning();
 	}
 
+	void CycleModes()
+	{
+		m_mode = static_cast<TunerMode::Type>((m_mode + 1) % TunerMode::Max);
+	}
+
 	void Go()
 	{
 		Start();
@@ -1300,7 +1310,13 @@ public:
 				}
 
 				// Cycle modes
-				m_mode = static_cast<TunerMode::Type>((m_mode + 1) % TunerMode::Max);
+				CycleModes();
+#if !ENABLE_MIDI				
+				if (m_mode == TunerMode::Midi)
+				{
+					CycleModes();
+				}
+#endif
 				
 				// Enter new mode
 #if ENABLE_LCD
@@ -1461,8 +1477,11 @@ private:
 
 void setup()                                        // run once, when the sketch starts
 {
-	//Serial.begin(9600); // for debugging
+#if ENABLE_MIDI
 	Serial.begin(31250); // for MIDI
+#else
+	Serial.begin(9600); // for debugging
+#endif // #if ENABLE_MIDI
 	pinMode(kStatusPin, OUTPUT);            // sets the digital pin as output
 	pinMode(kStatusPin2, OUTPUT);            // sets the digital pin as output
 	digitalWrite(kStatusPin, LOW); 
