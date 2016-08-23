@@ -72,6 +72,7 @@ static int const kModeButtonPin = 11;
 #include <inttypes.h>
 #include "Print.h"
 
+#if ENABLE_LCD
 ///////////////////////////////////////////////////////////////////////////////
 // LCD code.  This began as a straight copy of the Arduino LiquidCrystal library,
 // and it was tweaked afterwards for the MTC-S16205DFYHSAY.
@@ -255,6 +256,8 @@ void LiquidCrystal::send(uint8_t value, uint8_t mode) {
     digitalWrite(_enable_pin, LOW);
   }
 }
+LiquidCrystal* g_lcd;
+#endif // #if ENABLE_LCD
 
 ///////////////////////////////////////////////////////////////////////////////
 // Utility stuff
@@ -281,8 +284,13 @@ int AvailableMemory()
 }
 
 #if ENABLE_PRINT
-LiquidCrystal* g_lcd;
+
+#if ENABLE_LCD
 #define DEFAULT_PRINT g_lcd
+#else
+#define DEFAULT_PRINT (&Serial)
+#endif
+
 void Ln(Print* p = DEFAULT_PRINT)
 {
 	p->println("");
@@ -513,6 +521,7 @@ bool g_noteSharpSign[NUM_NOTES] =
 	false
 };
 
+#if ENABLE_LCD
 WideGlyph g_noteGlyphs[7] =
 {
 	{//   9876543210
@@ -579,6 +588,7 @@ WideGlyph g_noteGlyphs[7] =
 		0b0011111110
 	}
 };
+#endif // #if ENABLE_LCD
 
 static int const A440_NOTE = 69;
 static int const A880_NOTE = A440_NOTE + 12;
@@ -683,6 +693,9 @@ public:
 #error Unknown temperament!
 #endif 
 
+	Serial.write("Constructing tuner...");
+	Ln();
+
 #if ENABLE_LCD
 		g_lcd = &m_lcd;
 #endif // #if ENABLE_LCD
@@ -717,6 +730,9 @@ public:
 	
 	void Start()
 	{
+		Serial.write("Starting tuner...");
+		Ln();
+
 #if ENABLE_LCD
 		m_lcd.clear();
 #if ENABLE_STARTUP_MESSAGE
@@ -785,6 +801,9 @@ public:
 
 	void Stop()
 	{
+		Serial.write("Stopping tuner...");
+		Ln();
+		
 		// Disable auto-trigger mode
 		cbi(ADCSRA, ADATE);
 
@@ -816,11 +835,15 @@ public:
 
 	void SaveTuning()
 	{
+		Serial.write("Saving tuning...");
+		Ln();
 		SaveEepromLong(0, m_a440.ul);
 	}
 
 	void LoadTuning()
 	{
+		Serial.write("Loading tuning...");
+		Ln();
 		m_a440.ul = LoadEepromLong(0);
 	}
 
@@ -1246,10 +1269,15 @@ public:
 
 	void TunePitch()
 	{
+		Serial.write("Tuning pitch...");
+		Ln();
 		unsigned long lastPress = millis();
 		bool firstTime = true;
 		while (millis() - lastPress < 2000)
 		{
+			Serial.write("Tuning pitch loop");
+			Ln();
+			
 			g_pitchDownButton.Update();
 			g_pitchUpButton.Update();
 
@@ -1302,6 +1330,9 @@ public:
 
 	void Go()
 	{
+		Serial.write("Initializing...");
+		Ln();
+
 		Start();
 
 		float filteredFrequency = -1.0f;
@@ -1309,6 +1340,9 @@ public:
 
 		while(1)
 		{
+			Serial.write("Main tuner loop");
+			Ln();
+			
 			g_pitchDownButton.Update();
 			g_pitchUpButton.Update();
 
