@@ -57,7 +57,16 @@ extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
 #define ENABLE_LCD 0
 #define ENABLE_MIDI 0
 #define ENABLE_BUTTON_INPUTS 0
-#define PRINT_FREQUENCY_TO_SERIAL 1
+#define PRINT_FREQUENCY_TO_SERIAL 0
+#define PRINT_FREQUENCY_TO_SERIAL_VT100 1
+#define ENABLE_DEBUG_PRINT_STATEMENTS 0
+//#define Serial _SERIAL_FAIL_
+
+#if ENABLE_DEBUG_PRINT_STATEMENTS
+#define DEBUG_PRINT_STATEMENTS(x) x
+#else
+#define DEBUG_PRINT_STATEMENTS(x)
+#endif
 
 #define EQUAL_TEMPERAMENT 1
 #define JUST_TEMPERAMENT 2
@@ -297,6 +306,20 @@ int AvailableMemory()
 void Ln(Print* p = DEFAULT_PRINT)
 {
 	p->println("");
+}
+
+void ClearScreen(Print* p = DEFAULT_PRINT)
+{
+	p->print("\x1B[2J");
+}
+
+void MoveCursor(int x, int y, Print* p = DEFAULT_PRINT)
+{
+	p->print("\x1B[");
+	p->print(y + 1);
+	p->print(";");
+	p->print(x + 1);
+	p->print("H");
 }
 
 void Space(Print* p = DEFAULT_PRINT)
@@ -630,6 +653,7 @@ float g_noteSemitoneRatio[] =
 	//1.0f + 7.0 / 9.0f, 
 	//1.0f + 4.0 / 5.0f,
 	1.0f + 7.0 / 8.0f,
+	2.0f,
 };
 #else
 #error Unknown temperament!
@@ -698,8 +722,7 @@ public:
 	{
 		m_a440.f = DEFAULT_A440;
 
-	Serial.write("Constructing tuner...");
-	Ln();
+	DEBUG_PRINT_STATEMENTS(Serial.write("Constructing tuner..."); Ln(););
 
 #if ENABLE_LCD
 		g_lcd = &m_lcd;
@@ -735,8 +758,7 @@ public:
 	
 	void Start()
 	{
-		Serial.write("Starting tuner...");
-		Ln();
+		DEBUG_PRINT_STATEMENTS(Serial.write("Starting tuner..."); Ln(););
 
 #if ENABLE_LCD
 		m_lcd.clear();
@@ -806,8 +828,7 @@ public:
 
 	void Stop()
 	{
-		Serial.write("Stopping tuner...");
-		Ln();
+		DEBUG_PRINT_STATEMENTS(Serial.write("Stopping tuner..."); Ln(););
 		
 		// Disable auto-trigger mode
 		cbi(ADCSRA, ADATE);
@@ -849,12 +870,15 @@ public:
 		m_a440.f = DEFAULT_A440; //@HACK
 		if ((m_a440.f < MIN_FREQUENCY) || (m_a440.f > MAX_FREQUENCY))
 		{
-			PrintStringFloat("Bad tuning", m_a440.f); Ln();
-			Serial.println("No saved tuning or corrupted value, loading default");
+			DEBUG_PRINT_STATEMENTS(
+			{
+				PrintStringFloat("Bad tuning", m_a440.f); Ln();
+				Serial.println("No saved tuning or corrupted value, loading default");
+			});
 			m_a440.f = DEFAULT_A440;
 			SaveTuning();
 		}
-		PrintStringFloat("Loaded tuning", m_a440.f); Ln();
+		DEBUG_PRINT_STATEMENTS(PrintStringFloat("Loaded tuning", m_a440.f); Ln(););
 	}
 
 	// The following two functions require proper setup in Start()
@@ -961,34 +985,34 @@ public:
 	// Converts a fundamental frequency in Hz to a MIDI note index.  Slow.
 	int GetMidiNoteIndexForFrequency(float frequency)
 	{
-		Serial.write("GetMidiNoteIndexForFrequency()");
-		Ln();
+		DEBUG_PRINT_STATEMENTS(Serial.write("GetMidiNoteIndexForFrequency()"); Ln(););
 
 		if (frequency <= 0.0f)
 		{
-			Serial.write("earlying out, freq is <= 0");
-			Ln();
+			DEBUG_PRINT_STATEMENTS(Serial.write("earlying out, freq is <= 0"); Ln(););
 			return -1;
 		}
 
-		PrintStringFloat("Frequency", frequency); Ln();
+		DEBUG_PRINT_STATEMENTS(PrintStringFloat("Frequency", frequency); Ln(););
 
 		int note = A440_NOTE;
 		float a440 = m_a440.f;
 		float a440_2 = 2.0f * a440;
-		PrintStringFloat("a440", a440); Ln();
+		DEBUG_PRINT_STATEMENTS(PrintStringFloat("a440", a440); Ln(););
 		while (frequency < a440)
 		{
-			Serial.write("Double up"); Ln();
+			DEBUG_PRINT_STATEMENTS(Serial.write("Double up"); Ln(););
 			frequency *= 2.0f;
 			note -= 12;
 		}
 		while (frequency >= a440_2)
 		{
-			Serial.write("Double down"); Ln();
+			DEBUG_PRINT_STATEMENTS(Serial.write("Double down"); Ln(););
 			frequency *= 0.5f;
 			note += 12;
 		}
+
+		DEBUG_PRINT_STATEMENTS(PrintStringFloat("Centered frequency", frequency); Ln(););
 
 		auto rangeIndex = 0;
 		float rangeHigh = g_noteSemitoneRatio[rangeIndex] * a440;
@@ -998,30 +1022,27 @@ public:
 			rangeLow = rangeHigh;
 			++rangeIndex;
 			rangeHigh = g_noteSemitoneRatio[rangeIndex] * a440;
-			PrintStringFloat("rangeLow", rangeLow);
-			Ln();
-			PrintStringFloat("rangeHigh", rangeHigh);
-			Ln();
+			DEBUG_PRINT_STATEMENTS(
+			{
+				PrintStringFloat("rangeLow", rangeLow); Ln();
+				PrintStringFloat("rangeHigh", rangeHigh); Ln();
+			});
 			if ((frequency >= rangeLow) && (frequency < rangeHigh))
 			{
-				PrintStringFloat("found note!", rangeHigh);
-				Ln();
+				DEBUG_PRINT_STATEMENTS(PrintStringFloat("found note!", rangeHigh); Ln(););
 				break;
 			}
 			++note;
-			PrintStringInt("note", note);
-			Ln();
+			DEBUG_PRINT_STATEMENTS(PrintStringInt("note", note); Ln(););
 		}
-		PrintStringInt("Final note", note);
-		Ln();
+		DEBUG_PRINT_STATEMENTS(PrintStringInt("Final note", note); Ln(););
 		return note;
 	}
 
 	// Compute the fundamental frequency of a given MIDI note index.  Slow.
 	float GetFrequencyForMidiNoteIndex(int note)
 	{
-		Serial.write("GetFrequencyForMidiNoteIndex()");
-		Ln();
+		DEBUG_PRINT_STATEMENTS({ Serial.write("GetFrequencyForMidiNoteIndex()"); Ln(); });
 
 		if (note < 0.0f)
 		{
@@ -1096,7 +1117,7 @@ public:
 
 	float DetermineSignalPitch()
 	{
-		Serial.write("DetermineSignalPitch()"); Ln();
+		DEBUG_PRINT_STATEMENTS({Serial.write("DetermineSignalPitch()"); Ln();});
 
 		// Sample the signal into our buffer, and track its amplitude.
 		int signalMin = INT_MAX;
@@ -1109,9 +1130,12 @@ public:
 			signalMax = max(m_buffer[i], signalMax);
 			m_maxAmplitude = max(m_maxAmplitude, abs(signalMax - signalMin));
 		}
-		PrintStringInt("signalMin", signalMin); Ln();
-		PrintStringInt("signalMax", signalMax); Ln();
-		PrintStringInt("m_maxAmplitude", m_maxAmplitude); Ln();
+		DEBUG_PRINT_STATEMENTS(
+		{
+			PrintStringInt("signalMin", signalMin); Ln();
+			PrintStringInt("signalMax", signalMax); Ln();
+			PrintStringInt("m_maxAmplitude", m_maxAmplitude); Ln();
+		});
 
 		float result = 0.0f;
 
@@ -1367,7 +1391,15 @@ public:
 
 	void Go()
 	{
-		Serial.write("Initializing..."); Ln();
+		DEBUG_PRINT_STATEMENTS({Serial.write("Initializing..."); Ln();});
+
+#define TEST_FREQUENCY(x) //PrintStringInt(#x, GetMidiNoteIndexForFrequency(x)); Ln();
+		TEST_FREQUENCY(474.83380f);
+		TEST_FREQUENCY(500.0f);
+		TEST_FREQUENCY(600.0f);
+		TEST_FREQUENCY(700.0f);
+		TEST_FREQUENCY(800.0f);
+		TEST_FREQUENCY(900.0f);
 
 		Start();
 
@@ -1376,11 +1408,9 @@ public:
 
 		while(1)
 		{
-			Serial.write("Main tuner loop");
-			Ln();
+			DEBUG_PRINT_STATEMENTS({ Serial.write("Main tuner loop"); Ln(); });
 			
-			Serial.write("Button updates");
-			Ln();
+			DEBUG_PRINT_STATEMENTS({ Serial.write("Button updates"); Ln(); });
 			g_pitchDownButton.Update();
 			g_pitchUpButton.Update();
 
@@ -1393,8 +1423,7 @@ public:
 
 			if (g_modeButton.JustPressed())
 			{
-				Serial.write("Mode button pressed");
-				Ln();
+				DEBUG_PRINT_STATEMENTS({ Serial.write("Mode button pressed"); Ln(); });
 
 				// Exit current mode
 				switch (m_mode)
@@ -1433,21 +1462,17 @@ public:
 			m_lcd.home();
 #endif // #if ENABLE_LCD
 
-			Serial.write("DetermineSignalPitch");
-			Ln();
+			DEBUG_PRINT_STATEMENTS({Serial.write("DetermineSignalPitch"); Ln();});
 			float instantFrequency = DetermineSignalPitch();
-			PrintStringFloat("instantFrequency", instantFrequency);
-			Ln();
+			DEBUG_PRINT_STATEMENTS({PrintStringFloat("instantFrequency", instantFrequency); Ln();});
 
-			Serial.write("GetMidiNoteIndexForFrequency");
-			Ln();
+			DEBUG_PRINT_STATEMENTS({Serial.write("GetMidiNoteIndexForFrequency"); Ln();});
 			m_tunerNote = GetMidiNoteIndexForFrequency(instantFrequency);
 			float centerFrequency = GetFrequencyForMidiNoteIndex(m_tunerNote);
 			float minFrequency = centerFrequency * FREQUENCY_FILTER_WINDOW_RATIO_DOWN;
 			float maxFrequency = centerFrequency * FREQUENCY_FILTER_WINDOW_RATIO_UP;
 
-			Serial.write("instantFrequency");
-			Ln();
+			DEBUG_PRINT_STATEMENTS({Serial.write("instantFrequency"); Ln();});
 			if (instantFrequency >= 0.0f)
 			{
 				if ((filteredFrequency >= 0.0f) && (filteredFrequency >= minFrequency) && (filteredFrequency <= maxFrequency))
@@ -1471,8 +1496,7 @@ public:
 			// only allow semitone changes outside a strike; otherwise display nothing (i.e. false-detect an 330 as a 110, etc.)
 			if (m_mode == TunerMode::Midi)
 			{
-				Serial.write("Midi mode");
-				Ln();
+				DEBUG_PRINT_STATEMENTS({ Serial.write("Midi mode"); Ln(); });
 				if (m_maxAmplitude - m_lastMaxAmplitude > 25)
 				{
 					m_newMidiNote = true;
@@ -1509,8 +1533,7 @@ public:
 			}
 
 #if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL
-			Serial.write("percent");
-			Ln();
+			DEBUG_PRINT_STATEMENTS(Serial.write("percent"); Ln(););
 			float percent = 0.0f;
 			if (filteredFrequency < centerFrequency)
 			{
