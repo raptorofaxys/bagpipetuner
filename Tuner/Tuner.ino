@@ -263,6 +263,9 @@ LiquidCrystal* g_lcd;
 // Utility stuff
 ///////////////////////////////////////////////////////////////////////////////
 
+const int INT_MIN = (1 << (sizeof(int) * 8 - 1));
+const int INT_MAX = (~INT_MIN);  
+
 // From http://www.arduino.cc/playground/Code/AvailableMemory
 // This function will return the number of bytes currently free in RAM.
 // written by David A. Mellis
@@ -307,7 +310,7 @@ void Cls(Print* p = DEFAULT_PRINT)
 	p->print("[2J");
 }
 
-void PrintFloat(float f, int decimals = 5, Print* p = DEFAULT_PRINT)
+void PrintFloat(float f, int decimals = 10, Print* p = DEFAULT_PRINT)
 {
 	if (f < 0)
 	{
@@ -590,6 +593,14 @@ WideGlyph g_noteGlyphs[7] =
 };
 #endif // #if ENABLE_LCD
 
+#if (TEMPERAMENT == EQUAL_TEMPERAMENT)
+float const DEFAULT_A440 = 440.0f;
+#elif (TEMPERAMENT == JUST_TEMPERAMENT)
+float const DEFAULT_A440 = 479.0f;
+#else
+#error Unknown temperament!
+#endif 
+
 static int const A440_NOTE = 69;
 static int const A880_NOTE = A440_NOTE + 12;
 
@@ -685,13 +696,7 @@ public:
 		, m_mode(TunerMode::Tuner)
 		, m_newMidiNote(false)
 	{
-#if (TEMPERAMENT == EQUAL_TEMPERAMENT)
-		m_a440.f = 440.0f;
-#elif (TEMPERAMENT == JUST_TEMPERAMENT)
-		m_a440.f = 479.0f;
-#else
-#error Unknown temperament!
-#endif 
+		m_a440.f = DEFAULT_A440;
 
 	Serial.write("Constructing tuner...");
 	Ln();
@@ -796,7 +801,7 @@ public:
 #endif // #if ENABLE_LCD
 
 		LoadTuning();
-		TunePitch();
+		//TunePitch();
 	}
 
 	void Stop()
@@ -835,16 +840,21 @@ public:
 
 	void SaveTuning()
 	{
-		Serial.write("Saving tuning...");
-		Ln();
 		SaveEepromLong(0, m_a440.ul);
 	}
 
 	void LoadTuning()
 	{
-		Serial.write("Loading tuning...");
-		Ln();
 		m_a440.ul = LoadEepromLong(0);
+		m_a440.f = DEFAULT_A440; //@HACK
+		if ((m_a440.f < MIN_FREQUENCY) || (m_a440.f > MAX_FREQUENCY))
+		{
+			PrintStringFloat("Bad tuning", m_a440.f); Ln();
+			Serial.println("No saved tuning or corrupted value, loading default");
+			m_a440.f = DEFAULT_A440;
+			SaveTuning();
+		}
+		PrintStringFloat("Loaded tuning", m_a440.f); Ln();
 	}
 
 	// The following two functions require proper setup in Start()
@@ -855,12 +865,15 @@ public:
 		}
 		unsigned int result = ADCH;
 		sbi(ADCSRA, ADIF);
+		//PrintStringInt("ReadInput8BitsUnsigned", result); Ln();
 		return result;
 	}
 	
 	int ReadInput8BitsSigned()
 	{
-		return ReadInput8BitsUnsigned() - 128;
+		int result = ReadInput8BitsUnsigned() - 128;
+		//PrintStringInt("ReadInput8BitsSigned", result); Ln();
+		return result;
 	}
 	
 	// Given a MIDI note index, returns the corresponding index into the global string array of note names.
@@ -948,21 +961,31 @@ public:
 	// Converts a fundamental frequency in Hz to a MIDI note index.  Slow.
 	int GetMidiNoteIndexForFrequency(float frequency)
 	{
-		if (frequency < 0.0f)
+		Serial.write("GetMidiNoteIndexForFrequency()");
+		Ln();
+
+		if (frequency <= 0.0f)
 		{
+			Serial.write("earlying out, freq is <= 0");
+			Ln();
 			return -1;
 		}
+
+		PrintStringFloat("Frequency", frequency); Ln();
 
 		int note = A440_NOTE;
 		float a440 = m_a440.f;
 		float a440_2 = 2.0f * a440;
+		PrintStringFloat("a440", a440); Ln();
 		while (frequency < a440)
 		{
+			Serial.write("Double up"); Ln();
 			frequency *= 2.0f;
 			note -= 12;
 		}
 		while (frequency >= a440_2)
 		{
+			Serial.write("Double down"); Ln();
 			frequency *= 0.5f;
 			note += 12;
 		}
@@ -975,18 +998,31 @@ public:
 			rangeLow = rangeHigh;
 			++rangeIndex;
 			rangeHigh = g_noteSemitoneRatio[rangeIndex] * a440;
+			PrintStringFloat("rangeLow", rangeLow);
+			Ln();
+			PrintStringFloat("rangeHigh", rangeHigh);
+			Ln();
 			if ((frequency >= rangeLow) && (frequency < rangeHigh))
 			{
+				PrintStringFloat("found note!", rangeHigh);
+				Ln();
 				break;
 			}
 			++note;
+			PrintStringInt("note", note);
+			Ln();
 		}
+		PrintStringInt("Final note", note);
+		Ln();
 		return note;
 	}
 
 	// Compute the fundamental frequency of a given MIDI note index.  Slow.
 	float GetFrequencyForMidiNoteIndex(int note)
 	{
+		Serial.write("GetFrequencyForMidiNoteIndex()");
+		Ln();
+
 		if (note < 0.0f)
 		{
 			return -1.0f;
@@ -1060,16 +1096,22 @@ public:
 
 	float DetermineSignalPitch()
 	{
+		Serial.write("DetermineSignalPitch()"); Ln();
+
 		// Sample the signal into our buffer, and track its amplitude.
+		int signalMin = INT_MAX;
+		int signalMax = INT_MIN;
 		m_maxAmplitude = 0;
 		for (int i = 0; i < BUFFER_SIZE; ++i)
 		{
 			m_buffer[i] = ReadInput8BitsSigned();
-			if (abs(m_buffer[i]) > m_maxAmplitude)
-			{
-				m_maxAmplitude = abs(m_buffer[i]);
-			}
+			signalMin = min(m_buffer[i], signalMin);
+			signalMax = max(m_buffer[i], signalMax);
+			m_maxAmplitude = max(m_maxAmplitude, abs(signalMax - signalMin));
 		}
+		PrintStringInt("signalMin", signalMin); Ln();
+		PrintStringInt("signalMax", signalMax); Ln();
+		PrintStringInt("m_maxAmplitude", m_maxAmplitude); Ln();
 
 		float result = 0.0f;
 
@@ -1269,15 +1311,10 @@ public:
 
 	void TunePitch()
 	{
-		Serial.write("Tuning pitch...");
-		Ln();
 		unsigned long lastPress = millis();
 		bool firstTime = true;
 		while (millis() - lastPress < 2000)
 		{
-			Serial.write("Tuning pitch loop");
-			Ln();
-			
 			g_pitchDownButton.Update();
 			g_pitchUpButton.Update();
 
@@ -1330,8 +1367,7 @@ public:
 
 	void Go()
 	{
-		Serial.write("Initializing...");
-		Ln();
+		Serial.write("Initializing..."); Ln();
 
 		Start();
 
@@ -1343,6 +1379,8 @@ public:
 			Serial.write("Main tuner loop");
 			Ln();
 			
+			Serial.write("Button updates");
+			Ln();
 			g_pitchDownButton.Update();
 			g_pitchUpButton.Update();
 
@@ -1355,6 +1393,9 @@ public:
 
 			if (g_modeButton.JustPressed())
 			{
+				Serial.write("Mode button pressed");
+				Ln();
+
 				// Exit current mode
 				switch (m_mode)
 				{
@@ -1392,13 +1433,21 @@ public:
 			m_lcd.home();
 #endif // #if ENABLE_LCD
 
+			Serial.write("DetermineSignalPitch");
+			Ln();
 			float instantFrequency = DetermineSignalPitch();
+			PrintStringFloat("instantFrequency", instantFrequency);
+			Ln();
 
+			Serial.write("GetMidiNoteIndexForFrequency");
+			Ln();
 			m_tunerNote = GetMidiNoteIndexForFrequency(instantFrequency);
 			float centerFrequency = GetFrequencyForMidiNoteIndex(m_tunerNote);
 			float minFrequency = centerFrequency * FREQUENCY_FILTER_WINDOW_RATIO_DOWN;
 			float maxFrequency = centerFrequency * FREQUENCY_FILTER_WINDOW_RATIO_UP;
 
+			Serial.write("instantFrequency");
+			Ln();
 			if (instantFrequency >= 0.0f)
 			{
 				if ((filteredFrequency >= 0.0f) && (filteredFrequency >= minFrequency) && (filteredFrequency <= maxFrequency))
@@ -1422,6 +1471,8 @@ public:
 			// only allow semitone changes outside a strike; otherwise display nothing (i.e. false-detect an 330 as a 110, etc.)
 			if (m_mode == TunerMode::Midi)
 			{
+				Serial.write("Midi mode");
+				Ln();
 				if (m_maxAmplitude - m_lastMaxAmplitude > 25)
 				{
 					m_newMidiNote = true;
@@ -1458,6 +1509,8 @@ public:
 			}
 
 #if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL
+			Serial.write("percent");
+			Ln();
 			float percent = 0.0f;
 			if (filteredFrequency < centerFrequency)
 			{
@@ -1499,6 +1552,8 @@ public:
 #endif // #if ENABLE_LCD
 
 #if PRINT_FREQUENCY_TO_SERIAL
+			Serial.write("Printing");
+			Ln();
 			PrintStringFloat("Instant freq", instantFrequency);
 			Ln();
 			PrintStringFloat("Filtered freq", filteredFrequency);
@@ -1549,6 +1604,7 @@ void setup()                                        // run once, when the sketch
 #else
 	Serial.begin(9600); // for debugging
 #endif // #if ENABLE_MIDI
+	Serial.println("Setup hardwareserial.");
 	pinMode(kStatusPin, OUTPUT);            // sets the digital pin as output
 	pinMode(kStatusPin2, OUTPUT);            // sets the digital pin as output
 	digitalWrite(kStatusPin, LOW); 
