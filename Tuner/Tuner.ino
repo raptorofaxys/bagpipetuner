@@ -92,7 +92,7 @@ extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
 #define ENABLE_BUTTON_INPUTS 0
 #define PRINT_FREQUENCY_TO_SERIAL 1
 #define PRINT_FREQUENCY_TO_SERIAL_VT100 0
-#define FAKE_FREQUENCY 1
+#define FAKE_FREQUENCY 0
 #define ENABLE_DEBUG_PRINT_STATEMENTS 0
 //#define Serial _SERIAL_FAIL_
 
@@ -649,14 +649,6 @@ WideGlyph g_noteGlyphs[7] =
 	}
 };
 #endif // #if ENABLE_LCD
-
-#if PRINT_FREQUENCY_TO_SERIAL_VT100
-//const char g_textDisplay[] = "(((((((>O<)))))))";
-const char g_textDisplay[] = "\xDB\xDB\xDB\xDB\xDB\xDB\xDB>O<\xDB\xDB\xDB\xDB\xDB\xDB\xDB";
-const uint8_t g_textColors[] = {31, 31, 31, 33, 33, 33, 32, 32, 37, 32, 32, 33, 33, 33, 31, 31, 31};
-const int g_textDisplayLen = (sizeof(g_textDisplay) - 1) / sizeof(char);
-STATIC_ASSERT(g_textDisplayLen == sizeof(g_textColors) / sizeof(g_textColors[0]));
-#endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
 
 #if (TEMPERAMENT == EQUAL_TEMPERAMENT)
 float const DEFAULT_A440 = 440.0f;
@@ -1630,8 +1622,6 @@ public:
 			PrintStringFloat("Top frequency for note", maxFrequency); Ln();
 			PrintStringFloat("Percent note (50% is perfect)", percent); Ln();
 #if PRINT_FREQUENCY_TO_SERIAL_VT100
-			//Serial.print("\x1B[2;31;40m\xFE\xFE\xFE \x1B[2;33;40m\xFE\xFE\xFE \x1B[2;32;40m\xFE\xAF\xDB\xAE\xFE \x1B[2;33;40m\xFE\xFE\xFE \x1B[2;31;40m\xFE\xFE\xFE"); Ln();
-			//const char display[] = "(>O<)";
 			percent = Clamp(percent, 0.0f, 0.9999f);
 			const int numCharacters = 31;
 			const int centerCharacterIndex = numCharacters / 2;
@@ -1639,31 +1629,12 @@ public:
 			const char* tunerCharacters[2][3] = {{"»", /*"·"*/"o", "«"}, {"|", "O", "|"}};
 			for (int i = 0; i < numCharacters; ++i)
 			{
-				// »»»»|»·O««««««
-				// »»»»»»O««««««
-				// >>|>>>·<<<<<<
-				// |{}=<>¦][()
 				int leftRightSelector = sgn(i - centerCharacterIndex) + 1;
 				int onOffSelector = (i == characterIndex) ? 1 : 0;
 				Serial.print(tunerCharacters[onOffSelector][leftRightSelector]);
 			}
-			
-			//int characterIndex = (percent * g_textDisplayLen);
-			// for (int i = 0; i < g_textDisplayLen; ++i)
-			// {
-			// 	//Serial.print((i == characterIndex) ? '|' : display[i]);
-			// 	Serial.print("\x1B[");
-			// 	Serial.print((i == characterIndex) ? '1' : '2');
-			// 	Serial.print("m\x1B[");
-			// 	//Serial.print(';');
-			// 	Serial.print(int(g_textColors[i]));
-			// 	Serial.print("m");
-			// 	//Serial.print(";40m");
-			// 	Serial.print(g_textDisplay[i]);
-			// }
 			Serial.print(" ");
 			Ln();
-			//Serial.print("\x1B[2;31;40m(((\x1B[2;33;40m(((\x1B[2;32;40m(>O<)\x1B[2;33;40m)))\x1B[2;31;40m)))"); Ln();
 #endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
 #endif //#if PRINT_FREQUENCY_TO_SERIAL
 		}
