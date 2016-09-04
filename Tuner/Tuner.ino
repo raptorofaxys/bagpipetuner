@@ -61,6 +61,12 @@ float Clamp(float v, float min_, float max_)
 	return min(max(v, min_), max_);
 }
 
+// from http://stackoverflow.com/questions/1903954/is-there-a-standard-sign-function-signum-sgn-in-c-c
+template <typename T> int sgn(T val)
+{
+    return (T(0) < val) - (val < T(0));
+}
+
 // from wiring_private.h
 #ifndef cbi
 #define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
@@ -84,8 +90,8 @@ extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
 #define ENABLE_LCD 0
 #define ENABLE_MIDI 0
 #define ENABLE_BUTTON_INPUTS 0
-#define PRINT_FREQUENCY_TO_SERIAL 0
-#define PRINT_FREQUENCY_TO_SERIAL_VT100 1
+#define PRINT_FREQUENCY_TO_SERIAL 1
+#define PRINT_FREQUENCY_TO_SERIAL_VT100 0
 #define FAKE_FREQUENCY 1
 #define ENABLE_DEBUG_PRINT_STATEMENTS 0
 //#define Serial _SERIAL_FAIL_
@@ -1497,7 +1503,7 @@ public:
 			float instantFrequency = DetermineSignalPitch();
 #if FAKE_FREQUENCY
 			static float t = 0.0f;
-			t += 0.0001f;
+			t += 0.001f;
 			instantFrequency = 400.0f + 200.0f * sinf(t);
 #endif // #if FAKE_FREQUENCY
 			DEBUG_PRINT_STATEMENTS(PrintStringFloat("instantFrequency", instantFrequency); Ln(););
@@ -1611,20 +1617,11 @@ public:
 #endif // #if ENABLE_LCD
 
 #if PRINT_FREQUENCY_TO_SERIAL
-			Serial.write("Printing");
-			Ln();
-			PrintStringFloat("Instant freq", instantFrequency);
-			Ln();
-			PrintStringFloat("Filtered freq", filteredFrequency);
-			Ln();
-			PrintStringFloat("MIDI note", m_tunerNote);
-			Ln();
-			PrintStringFloat("Percent note (50% is perfect)", percent);
-			Ln();
-#endif // #if PRINT_FREQUENCY_TO_SERIAL
 #if PRINT_FREQUENCY_TO_SERIAL_VT100
 			MoveCursor(0, 0);
 			Serial.print("\x1B[0m");
+#endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
+			Serial.print("-----"); Ln();
 			PrintStringFloat("Instant freq", instantFrequency); Ln();
 			PrintStringFloat("Filtered freq", filteredFrequency); Ln();
 			PrintStringInt("MIDI note", m_tunerNote); Ln();
@@ -1632,26 +1629,43 @@ public:
 			PrintStringFloat("Bottom frequency for note", minFrequency); Ln();
 			PrintStringFloat("Top frequency for note", maxFrequency); Ln();
 			PrintStringFloat("Percent note (50% is perfect)", percent); Ln();
+#if PRINT_FREQUENCY_TO_SERIAL_VT100
 			//Serial.print("\x1B[2;31;40m\xFE\xFE\xFE \x1B[2;33;40m\xFE\xFE\xFE \x1B[2;32;40m\xFE\xAF\xDB\xAE\xFE \x1B[2;33;40m\xFE\xFE\xFE \x1B[2;31;40m\xFE\xFE\xFE"); Ln();
 			//const char display[] = "(>O<)";
 			percent = Clamp(percent, 0.0f, 0.9999f);
-			int characterIndex = (percent * g_textDisplayLen);
-			for (int i = 0; i < g_textDisplayLen; ++i)
+			const int numCharacters = 31;
+			const int centerCharacterIndex = numCharacters / 2;
+			int characterIndex = (percent * numCharacters);
+			const char* tunerCharacters[2][3] = {{"»", /*"·"*/"o", "«"}, {"|", "O", "|"}};
+			for (int i = 0; i < numCharacters; ++i)
 			{
-				//Serial.print((i == characterIndex) ? '|' : display[i]);
-				Serial.print("\x1B[");
-				Serial.print((i == characterIndex) ? '1' : '2');
-				Serial.print("m\x1B[");
-				//Serial.print(';');
-				Serial.print(int(g_textColors[i]));
-				Serial.print("m");
-				//Serial.print(";40m");
-				Serial.print(g_textDisplay[i]);
+				// »»»»|»·O««««««
+				// »»»»»»O««««««
+				// >>|>>>·<<<<<<
+				// |{}=<>¦][()
+				int leftRightSelector = sgn(i - centerCharacterIndex) + 1;
+				int onOffSelector = (i == characterIndex) ? 1 : 0;
+				Serial.print(tunerCharacters[onOffSelector][leftRightSelector]);
 			}
+			
+			//int characterIndex = (percent * g_textDisplayLen);
+			// for (int i = 0; i < g_textDisplayLen; ++i)
+			// {
+			// 	//Serial.print((i == characterIndex) ? '|' : display[i]);
+			// 	Serial.print("\x1B[");
+			// 	Serial.print((i == characterIndex) ? '1' : '2');
+			// 	Serial.print("m\x1B[");
+			// 	//Serial.print(';');
+			// 	Serial.print(int(g_textColors[i]));
+			// 	Serial.print("m");
+			// 	//Serial.print(";40m");
+			// 	Serial.print(g_textDisplay[i]);
+			// }
 			Serial.print(" ");
 			Ln();
 			//Serial.print("\x1B[2;31;40m(((\x1B[2;33;40m(((\x1B[2;32;40m(>O<)\x1B[2;33;40m)))\x1B[2;31;40m)))"); Ln();
-#endif
+#endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
+#endif //#if PRINT_FREQUENCY_TO_SERIAL
 		}
 
 		Stop();
