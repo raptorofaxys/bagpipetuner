@@ -34,6 +34,33 @@ http://recherche.ircam.fr/equipes/pcm/cheveign/pss/2002_JASA_YIN.pdf
 		} \
 	}
 
+// Useful to print compile-time integer values, since instanciating a template with this incomplete type will
+// cause the compiler to include the value of N in the error message.  (On avr-gcc, this seems to only work
+// with free-standing variables, not members.)
+template<int N> struct PrintInt;
+
+// This is a very naive way of writing a static assertion facility, but avr-gcc is *very* far from compliant - it
+// will allow all sorts of illegal constructs - and my patience is running out. :P  Even though this will generate
+// a bit of code, it can hopefully be trivially stripped.
+#define STATIC_ASSERT3(x, line) void func##line(static_assert_<x>) { }
+#define STATIC_ASSERT2(x, line) STATIC_ASSERT3(x, line)
+#define STATIC_ASSERT(x) STATIC_ASSERT2(x, __LINE__)
+template <bool N> struct static_assert_;
+template<> struct static_assert_<true> {};
+
+// template <typename T> struct Identity { typedef T value; }; 
+
+// template <typename T>
+// T Clamp(T v, typename Identity<T>::value min_, typename Identity<T>::value max_)
+// {
+// 	return std::min(std::max(v, min_), max_);
+// }
+
+float Clamp(float v, float min_, float max_)
+{
+	return min(max(v, min_), max_);
+}
+
 // from wiring_private.h
 #ifndef cbi
 #define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
@@ -59,6 +86,7 @@ extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
 #define ENABLE_BUTTON_INPUTS 0
 #define PRINT_FREQUENCY_TO_SERIAL 0
 #define PRINT_FREQUENCY_TO_SERIAL_VT100 1
+#define FAKE_FREQUENCY 1
 #define ENABLE_DEBUG_PRINT_STATEMENTS 0
 //#define Serial _SERIAL_FAIL_
 
@@ -616,6 +644,14 @@ WideGlyph g_noteGlyphs[7] =
 };
 #endif // #if ENABLE_LCD
 
+#if PRINT_FREQUENCY_TO_SERIAL_VT100
+//const char g_textDisplay[] = "(((((((>O<)))))))";
+const char g_textDisplay[] = "\xDB\xDB\xDB\xDB\xDB\xDB\xDB>O<\xDB\xDB\xDB\xDB\xDB\xDB\xDB";
+const uint8_t g_textColors[] = {31, 31, 31, 33, 33, 33, 32, 32, 37, 32, 32, 33, 33, 33, 31, 31, 31};
+const int g_textDisplayLen = (sizeof(g_textDisplay) - 1) / sizeof(char);
+STATIC_ASSERT(g_textDisplayLen == sizeof(g_textColors) / sizeof(g_textColors[0]));
+#endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
+
 #if (TEMPERAMENT == EQUAL_TEMPERAMENT)
 float const DEFAULT_A440 = 440.0f;
 #elif (TEMPERAMENT == JUST_TEMPERAMENT)
@@ -627,12 +663,12 @@ float const DEFAULT_A440 = 479.0f;
 static int const A440_NOTE = 69;
 static int const A880_NOTE = A440_NOTE + 12;
 
-float const FREQUENCY_FILTER_WINDOW_RATIO_UP = 1.03f; 
+float const FREQUENCY_FILTER_WINDOW_RATIO_UP = 1.02f; 
 float const FREQUENCY_FILTER_WINDOW_RATIO_DOWN = 1.0f / FREQUENCY_FILTER_WINDOW_RATIO_UP; 
 
-#if (TEMPERAMENT == EQUAL_TEMPERAMENT)
 float const QUARTERTONE_UP = 1.0293022366f;
 float const QUARTERTONE_DOWN = 0.9715319412f;
+#if (TEMPERAMENT == EQUAL_TEMPERAMENT)
 float const SEMITONE_UP = 1.0594630944f;
 float const SEMITONE_DOWN = 0.9438743127f;
 #elif (TEMPERAMENT == JUST_TEMPERAMENT)
@@ -671,20 +707,6 @@ static int const FIXED_MASK_HI = ~((1 << FIXED_SHIFT_HI) - 1);
 #define		F2FIXED(x) ((Fixed) ((x) * (1 << FIXED_SHIFT)))
 #define		FIXED2I(x) ((x) >> FIXED_SHIFT)
 #define		FIXED2F(x) ((x) / float(1 << FIXED_SHIFT))
-
-// Useful to print compile-time integer values, since instanciating a template with this incomplete type will
-// cause the compiler to include the value of N in the error message.  (On avr-gcc, this seems to only work
-// with free-standing variables, not members.)
-template<int N> struct PrintInt;
-
-// This is a very naive way of writing a static assertion facility, but avr-gcc is *very* far from compliant - it
-// will allow all sorts of illegal constructs - and my patience is running out. :P  Even though this will generate
-// a bit of code, it can hopefully be trivially stripped.
-#define STATIC_ASSERT3(x, line) void func##line(static_assert_<x>) { }
-#define STATIC_ASSERT2(x, line) STATIC_ASSERT3(x, line)
-#define STATIC_ASSERT(x) STATIC_ASSERT2(x, __LINE__)
-template <bool N> struct static_assert_;
-template<> struct static_assert_<true> {};
 
 // Linearly interpolates between two 8-bit signed values.
 char InterpolateChar(char a, char b, char tFrac)
@@ -928,7 +950,8 @@ public:
 			return -1;
 		}
 
-		frequency *= QUARTERTONE_DOWN; // kind of like rounding the note, half a semitone (it's a multiplication because of logarithmic space)
+		// Shift the note down half a semitone so the frequency interval that maps to a MIDI note is centered on the note.
+		frequency *= QUARTERTONE_DOWN;
 
 		int note = A440_NOTE;
 		float a440 = m_a440.f;
@@ -993,6 +1016,10 @@ public:
 			return -1;
 		}
 
+		// Shift the note down up a semitone so the frequency interval that maps to a MIDI note is centered on the note.
+		// (Algorithm here is different from the one for equal temperament, we have to shift in the other direction.)
+		frequency *= QUARTERTONE_UP;
+
 		DEBUG_PRINT_STATEMENTS(PrintStringFloat("Frequency", frequency); Ln(););
 
 		int note = A440_NOTE;
@@ -1042,7 +1069,7 @@ public:
 	// Compute the fundamental frequency of a given MIDI note index.  Slow.
 	float GetFrequencyForMidiNoteIndex(int note)
 	{
-		DEBUG_PRINT_STATEMENTS({ Serial.write("GetFrequencyForMidiNoteIndex()"); Ln(); });
+		DEBUG_PRINT_STATEMENTS( Serial.write("GetFrequencyForMidiNoteIndex()"); Ln(); );
 
 		if (note < 0.0f)
 		{
@@ -1117,7 +1144,7 @@ public:
 
 	float DetermineSignalPitch()
 	{
-		DEBUG_PRINT_STATEMENTS({Serial.write("DetermineSignalPitch()"); Ln();});
+		DEBUG_PRINT_STATEMENTS(Serial.write("DetermineSignalPitch()"); Ln(););
 
 		// Sample the signal into our buffer, and track its amplitude.
 		int signalMin = INT_MAX;
@@ -1391,7 +1418,7 @@ public:
 
 	void Go()
 	{
-		DEBUG_PRINT_STATEMENTS({Serial.write("Initializing..."); Ln();});
+		DEBUG_PRINT_STATEMENTS(Serial.write("Initializing..."); Ln(););
 
 #define TEST_FREQUENCY(x) //PrintStringInt(#x, GetMidiNoteIndexForFrequency(x)); Ln();
 		TEST_FREQUENCY(474.83380f);
@@ -1403,14 +1430,18 @@ public:
 
 		Start();
 
+#if PRINT_FREQUENCY_TO_SERIAL_VT100
+		ClearScreen();
+#endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
+
 		float filteredFrequency = -1.0f;
 		int noteRepeatCount = 0;
 
 		while(1)
 		{
-			DEBUG_PRINT_STATEMENTS({ Serial.write("Main tuner loop"); Ln(); });
+			DEBUG_PRINT_STATEMENTS(Serial.write("Main tuner loop"); Ln(););
 			
-			DEBUG_PRINT_STATEMENTS({ Serial.write("Button updates"); Ln(); });
+			DEBUG_PRINT_STATEMENTS(Serial.write("Button updates"); Ln(););
 			g_pitchDownButton.Update();
 			g_pitchUpButton.Update();
 
@@ -1423,7 +1454,7 @@ public:
 
 			if (g_modeButton.JustPressed())
 			{
-				DEBUG_PRINT_STATEMENTS({ Serial.write("Mode button pressed"); Ln(); });
+				DEBUG_PRINT_STATEMENTS(Serial.write("Mode button pressed"); Ln(););
 
 				// Exit current mode
 				switch (m_mode)
@@ -1462,17 +1493,22 @@ public:
 			m_lcd.home();
 #endif // #if ENABLE_LCD
 
-			DEBUG_PRINT_STATEMENTS({Serial.write("DetermineSignalPitch"); Ln();});
+			DEBUG_PRINT_STATEMENTS(Serial.write("DetermineSignalPitch"); Ln(););
 			float instantFrequency = DetermineSignalPitch();
-			DEBUG_PRINT_STATEMENTS({PrintStringFloat("instantFrequency", instantFrequency); Ln();});
+#if FAKE_FREQUENCY
+			static float t = 0.0f;
+			t += 0.0001f;
+			instantFrequency = 400.0f + 200.0f * sinf(t);
+#endif // #if FAKE_FREQUENCY
+			DEBUG_PRINT_STATEMENTS(PrintStringFloat("instantFrequency", instantFrequency); Ln(););
 
-			DEBUG_PRINT_STATEMENTS({Serial.write("GetMidiNoteIndexForFrequency"); Ln();});
+			DEBUG_PRINT_STATEMENTS(Serial.write("GetMidiNoteIndexForFrequency"); Ln(););
 			m_tunerNote = GetMidiNoteIndexForFrequency(instantFrequency);
 			float centerFrequency = GetFrequencyForMidiNoteIndex(m_tunerNote);
 			float minFrequency = centerFrequency * FREQUENCY_FILTER_WINDOW_RATIO_DOWN;
 			float maxFrequency = centerFrequency * FREQUENCY_FILTER_WINDOW_RATIO_UP;
 
-			DEBUG_PRINT_STATEMENTS({Serial.write("instantFrequency"); Ln();});
+			DEBUG_PRINT_STATEMENTS(Serial.write("instantFrequency"); Ln(););
 			if (instantFrequency >= 0.0f)
 			{
 				if ((filteredFrequency >= 0.0f) && (filteredFrequency >= minFrequency) && (filteredFrequency <= maxFrequency))
@@ -1496,7 +1532,7 @@ public:
 			// only allow semitone changes outside a strike; otherwise display nothing (i.e. false-detect an 330 as a 110, etc.)
 			if (m_mode == TunerMode::Midi)
 			{
-				DEBUG_PRINT_STATEMENTS({ Serial.write("Midi mode"); Ln(); });
+				DEBUG_PRINT_STATEMENTS(Serial.write("Midi mode"); Ln(););
 				if (m_maxAmplitude - m_lastMaxAmplitude > 25)
 				{
 					m_newMidiNote = true;
@@ -1532,7 +1568,7 @@ public:
 				m_lastMaxAmplitude = m_maxAmplitude;
 			}
 
-#if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL
+#if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL || PRINT_FREQUENCY_TO_SERIAL_VT100
 			DEBUG_PRINT_STATEMENTS(Serial.write("percent"); Ln(););
 			float percent = 0.0f;
 			if (filteredFrequency < centerFrequency)
@@ -1586,6 +1622,36 @@ public:
 			PrintStringFloat("Percent note (50% is perfect)", percent);
 			Ln();
 #endif // #if PRINT_FREQUENCY_TO_SERIAL
+#if PRINT_FREQUENCY_TO_SERIAL_VT100
+			MoveCursor(0, 0);
+			Serial.print("\x1B[0m");
+			PrintStringFloat("Instant freq", instantFrequency); Ln();
+			PrintStringFloat("Filtered freq", filteredFrequency); Ln();
+			PrintStringInt("MIDI note", m_tunerNote); Ln();
+			PrintStringFloat("MIDI frequency", centerFrequency); Ln();
+			PrintStringFloat("Bottom frequency for note", minFrequency); Ln();
+			PrintStringFloat("Top frequency for note", maxFrequency); Ln();
+			PrintStringFloat("Percent note (50% is perfect)", percent); Ln();
+			//Serial.print("\x1B[2;31;40m\xFE\xFE\xFE \x1B[2;33;40m\xFE\xFE\xFE \x1B[2;32;40m\xFE\xAF\xDB\xAE\xFE \x1B[2;33;40m\xFE\xFE\xFE \x1B[2;31;40m\xFE\xFE\xFE"); Ln();
+			//const char display[] = "(>O<)";
+			percent = Clamp(percent, 0.0f, 0.9999f);
+			int characterIndex = (percent * g_textDisplayLen);
+			for (int i = 0; i < g_textDisplayLen; ++i)
+			{
+				//Serial.print((i == characterIndex) ? '|' : display[i]);
+				Serial.print("\x1B[");
+				Serial.print((i == characterIndex) ? '1' : '2');
+				Serial.print("m\x1B[");
+				//Serial.print(';');
+				Serial.print(int(g_textColors[i]));
+				Serial.print("m");
+				//Serial.print(";40m");
+				Serial.print(g_textDisplay[i]);
+			}
+			Serial.print(" ");
+			Ln();
+			//Serial.print("\x1B[2;31;40m(((\x1B[2;33;40m(((\x1B[2;32;40m(>O<)\x1B[2;33;40m)))\x1B[2;31;40m)))"); Ln();
+#endif
 		}
 
 		Stop();
@@ -1625,7 +1691,7 @@ void setup()                                        // run once, when the sketch
 #if ENABLE_MIDI
 	Serial.begin(31250); // for MIDI
 #else
-	Serial.begin(9600); // for debugging
+	Serial.begin(115200); // for debugging
 #endif // #if ENABLE_MIDI
 	Serial.println("Setup hardwareserial.");
 	pinMode(kStatusPin, OUTPUT);            // sets the digital pin as output
