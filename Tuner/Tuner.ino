@@ -91,8 +91,8 @@ extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
 #define ENABLE_MIDI 0
 #define ENABLE_BUTTON_INPUTS 0
 #define PRINT_FREQUENCY_TO_SERIAL 1
-#define PRINT_FREQUENCY_TO_SERIAL_VT100 0
-#define FAKE_FREQUENCY 0
+#define PRINT_FREQUENCY_TO_SERIAL_VT100 1
+#define FAKE_FREQUENCY 1
 #define ENABLE_DEBUG_PRINT_STATEMENTS 0
 //#define Serial _SERIAL_FAIL_
 
@@ -886,7 +886,13 @@ public:
 
 	void LoadTuning()
 	{
+		Serial.println("Saving default tuning");
+		m_a440.f = DEFAULT_A440; //@HACK
+		SaveTuning();
 		m_a440.ul = LoadEepromLong(0);
+		PrintStringFloat("Loaded test tuning", m_a440.f);
+
+		//m_a440.ul = LoadEepromLong(0);
 		m_a440.f = DEFAULT_A440; //@HACK
 		if ((m_a440.f < MIN_FREQUENCY) || (m_a440.f > MAX_FREQUENCY))
 		{
