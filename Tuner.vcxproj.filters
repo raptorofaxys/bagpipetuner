@@ -17,4 +17,9 @@
   <ItemGroup>
     <None Include="Tuner\Tuner.pde" />
   </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="__vm\.Tuner.vsarduino.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
 </Project>
