@@ -1,7 +1,7 @@
 /*
 
-Arduino chromatic guitar tuner.
-2008-2016 Frederic Hamel
+Arduino chromatic tuner.
+2008-2017 Frederic Hamel
 
 As a modified version of the Arduino core library, the LiquidCrystal class is licensed under the LGPL.
 See attached license.
@@ -88,7 +88,6 @@ extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
 #define ENABLE_STARTUP_MESSAGE 0
 #define ENABLE_PRINT 1
 #define ENABLE_LCD 0
-#define ENABLE_MIDI 0
 #define ENABLE_BUTTON_INPUTS 0
 #define PRINT_FREQUENCY_TO_SERIAL 1
 #define PRINT_FREQUENCY_TO_SERIAL_VT100 1
@@ -718,7 +717,6 @@ namespace TunerMode
 	enum Type
 	{
 		Tuner = 0,
-		Midi,
 		Max
 	};
 }
@@ -733,12 +731,9 @@ public:
 #if ENABLE_LCD
 		, m_lcd(2, 3, 4, 5, 6, 7, 8)
 #endif // #if ENABLE_LCD
-		, m_midiNote(-1)
 		, m_tunerNote(-1)
 		, m_maxAmplitude(-1)
-		, m_lastMaxAmplitude(-1)
 		, m_mode(TunerMode::Tuner)
-		, m_newMidiNote(false)
 	{
 		m_a440.f = DEFAULT_A440;
 
@@ -1110,10 +1105,10 @@ public:
 		int correllationStep = CORRELLATION_STEP;
 
 		// If we're in MIDI mode, lower the precision to gain speed.
-		if (m_mode == TunerMode::Midi)
-		{
-			correllationStep <<= 1;
-		}
+		//if (m_mode == TunerMode::Midi)
+		//{
+		//	correllationStep <<= 1;
+		//}
 
 		for (int i = 0; i < WINDOW_SIZE; i += correllationStep)
 		{
@@ -1190,10 +1185,10 @@ public:
 			
 			// If we're in MIDI mode, double the step; this will reduce precision, but increase speed (and thus reduce
 			// latency).
-			if (m_mode == TunerMode::Midi)
-			{
-				offsetStep <<= 1;
-			}
+			//if (m_mode == TunerMode::Midi)
+			//{
+			//	offsetStep <<= 1;
+			//}
 			
 			Fixed offsetIncrement = offsetStep;
 			for (Fixed offset = I2FIXED(MIN_SAMPLES); FIXED_INT(offset) < MAX_SAMPLES; offset += offsetIncrement)
@@ -1342,28 +1337,6 @@ public:
 #endif // #if ENABLE_LCD
 	}
 
-	void NoteOn()
-	{
-#if ENABLE_MIDI
-		Serial.write(0x90); // note on, channel 0
-		Serial.write(char(m_midiNote));
-		Serial.write(0x40); // velocity 64
-#endif // #if ENABLE_MIDI
-	}
-
-	void NoteOff()
-	{
-#if ENABLE_MIDI
-		if (m_midiNote >= 0)
-		{
-			Serial.write(0x80); // note off, channel 0;
-			Serial.write(char(m_midiNote));
-			Serial.write(0x7F); // velocity 127
-			m_midiNote = -1;
-		}
-#endif // #if ENABLE_MIDI
-	}
-
 	void TunePitch()
 	{
 		unsigned long lastPress = millis();
@@ -1463,31 +1436,19 @@ public:
 				// Exit current mode
 				switch (m_mode)
 				{
-				case TunerMode::Midi: NoteOff(); break;
 				default: break;
 				}
 
 				// Cycle modes
 				CycleModes();
-#if !ENABLE_MIDI				
-				if (m_mode == TunerMode::Midi)
-				{
-					CycleModes();
-				}
-#endif
 				
 				// Enter new mode
 #if ENABLE_LCD
 				m_lcd.clear();
 #endif // #if ENABLE_LCD
+
 				switch (m_mode)
 				{
-				case TunerMode::Midi:
-					{
-						m_newMidiNote = false;
-						m_lastMaxAmplitude = 0;
-					}
-					break;
 				default: 
 					break;
 				}
@@ -1530,48 +1491,6 @@ public:
 				filteredFrequency = -1.0f;
 			}
 
-			// Mini state machine: (disallows voice though - dammit)
-			// Detect note strikes
-			// only trigger "new note" messages on strikes, or on 3-4 repeatcount
-			// only allow semitone changes outside a strike; otherwise display nothing (i.e. false-detect an 330 as a 110, etc.)
-			if (m_mode == TunerMode::Midi)
-			{
-				DEBUG_PRINT_STATEMENTS(Serial.write("Midi mode"); Ln(););
-				if (m_maxAmplitude - m_lastMaxAmplitude > 25)
-				{
-					m_newMidiNote = true;
-				}
-				if (m_tunerNote >= 0)
-				{
-					if (m_tunerNote != m_midiNote)
-					{
-						NoteOff();
-						m_midiNote = m_tunerNote;
-						noteRepeatCount = 0;
-					}
-					else
-					{
-						++noteRepeatCount;
-					}
-
-					if ((m_newMidiNote && (noteRepeatCount == 1)) || (!m_newMidiNote & (noteRepeatCount == 3)))
-					{
-						NoteOn();
-						if (m_newMidiNote)
-						{
-							// Skip the repeat
-							noteRepeatCount = 5;
-							m_newMidiNote = false;
-						}
-					}
-				}
-				else
-				{
-					NoteOff();
-				}
-				m_lastMaxAmplitude = m_maxAmplitude;
-			}
-
 #if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL || PRINT_FREQUENCY_TO_SERIAL_VT100
 			DEBUG_PRINT_STATEMENTS(Serial.write("percent"); Ln(););
 			float percent = 0.0f;
@@ -1590,12 +1509,6 @@ public:
 
 			switch(m_mode)
 			{
-			case TunerMode::Midi:
-				{
-					m_lcd.setCursor(1, 1);
-					m_lcd.print("(MIDI mode)");
-				}
-				break;
 			case TunerMode::Tuner:
 				{
 					PrintCenterTick();
@@ -1662,12 +1575,9 @@ private:
 	} m_a440;
 	STATIC_ASSERT(sizeof(unsigned long) == sizeof(float)); // verify that things match up for the above union
 	
-	int m_midiNote;
 	int m_tunerNote;
 	int m_maxAmplitude;
-	int m_lastMaxAmplitude;
 	TunerMode::Type m_mode;
-	bool m_newMidiNote;
 };
 
 #undef ALWAYSPRINT
@@ -1679,11 +1589,7 @@ private:
 
 void setup()                                        // run once, when the sketch starts
 {
-#if ENABLE_MIDI
-	Serial.begin(31250); // for MIDI
-#else
 	Serial.begin(115200); // for debugging
-#endif // #if ENABLE_MIDI
 	Serial.println("Setup hardwareserial.");
 	pinMode(kStatusPin, OUTPUT);            // sets the digital pin as output
 	pinMode(kStatusPin2, OUTPUT);            // sets the digital pin as output
