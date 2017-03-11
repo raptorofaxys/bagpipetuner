@@ -91,7 +91,7 @@ extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
 #define ENABLE_BUTTON_INPUTS 0
 #define PRINT_FREQUENCY_TO_SERIAL 1
 #define PRINT_FREQUENCY_TO_SERIAL_VT100 1
-#define FAKE_FREQUENCY 1
+#define FAKE_FREQUENCY 0
 #define ENABLE_DEBUG_PRINT_STATEMENTS 0
 //#define Serial _SERIAL_FAIL_
 
@@ -721,21 +721,266 @@ namespace TunerMode
 	};
 }
 
-#define ALWAYSPRINT(s, v) { m_lcd.clear(); m_lcd.print(s); m_lcd.setCursor(0, 1); m_lcd.print(v); delay(1800); }
-#define DEBUGPRINT(s, v) if (debug) { m_lcd.clear(); m_lcd.print(s); m_lcd.setCursor(0, 1); m_lcd.print(v); delay(1800); }
+static int const PRESCALER = 0b00000111;
+static int const PRESCALER_DIVIDE = (1 << PRESCALER);
+static int const ADC_CLOCKS_PER_ADC_CONVERSION = 13;
+static unsigned long const CPU_CYCLES_PER_SAMPLE = ADC_CLOCKS_PER_ADC_CONVERSION * PRESCALER_DIVIDE;
+static unsigned long const SAMPLES_PER_SECOND = F_CPU / CPU_CYCLES_PER_SAMPLE;
+
+static int const MIN_FREQUENCY = 60;
+static int const MAX_FREQUENCY = 880;
+static int const MIN_SAMPLES = SAMPLES_PER_SECOND / MAX_FREQUENCY;
+static int const MAX_SAMPLES = SAMPLES_PER_SECOND / MIN_FREQUENCY;
+static int const WINDOW_SIZE = MAX_SAMPLES; //96; // samples
+static int const BUFFER_SIZE = WINDOW_SIZE + MAX_SAMPLES + 1; // for interpolation
+
+// This buffer is now global because we need to the compiler to use faster addressing modes that are only available with
+// fixed memory addresses. The buffer is now shared between the different tuner channels.
+char g_recordingBuffer[BUFFER_SIZE];
+
 class Tuner
 {
 public:
-	Tuner(int audioPin)
-		: m_audioPin(audioPin)
+	static int const NUM_CHANNELS = 4;
+
+	class Channel
+	{
+	public:
+		void SetPin(int audioPin)
+		{
+			m_audioPin = audioPin;
+		}
+
+		void SelectADCChannel()
+		{
+			// Select input channel + set reference to Vcc
+			ADMUX = /*(0 << 6) |*/ (m_audioPin & 0x0f);
+			ADMUX = (1 << 6) | (m_audioPin & 0x0f);
+
+			// Disable other ADC channels (try to reduce noise?)
+			DIDR0 = (0x3F ^ (1 << m_audioPin));
+		}
+
+		// This function requires proper setup in Tuner::Start() and SelectADCChannel()
+		unsigned int ReadInput8BitsUnsigned()
+		{
+			while ((ADCSRA & _BV(ADIF)) == 0)
+			{
+			}
+
+			unsigned int result = ADCH;
+			sbi(ADCSRA, ADIF);
+			//PrintStringInt("ReadInput8BitsUnsigned", result); Ln();
+			return result;
+		}
+
+		int ReadInput8BitsSigned()
+		{
+			int result = ReadInput8BitsUnsigned() - 128;
+			//PrintStringInt("ReadInput8BitsSigned", result); Ln();
+			return result;
+		}
+
+		unsigned long GetCorrellationFactorFixed(char* buffer, Fixed fixedOffset)
+		{
+			unsigned long result = 0;
+			int integer = FIXED_INT(fixedOffset);
+			int frac = FIXED_FRAC(fixedOffset);
+			int correllationStep = CORRELLATION_STEP;
+
+			// If we're in MIDI mode, lower the precision to gain speed.
+			//if (m_mode == TunerMode::Midi)
+			//{
+			//	correllationStep <<= 1;
+			//}
+
+			for (int i = 0; i < WINDOW_SIZE; i += correllationStep)
+			{
+				// Note this is done with 16-bit math; this is slower, but gives more precision.  In tests, using 8-bit
+				// math did not yield sufficient precision.
+				int a = buffer[i];
+				int b = InterpolateChar(buffer[i + integer], buffer[i + integer + 1], frac);
+				result += abs(b - a);
+			}
+			return result;
+		}
+
+		unsigned long GetCorrellationFactorPrime(unsigned long currentCorrellation, int numToDate, unsigned long sumToDate)
+		{
+			if (numToDate == 0)
+			{
+				return FIXED_ONE;
+			}
+			else
+			{
+				return ((currentCorrellation << FIXED_SHIFT) * numToDate) / sumToDate;
+			}
+		}
+
+		// Compute the frequency corresponding to a given a fixed-point offset into our sampling buffer (usually where
+		// the best/minimal autocorrellation was achieved).
+		float GetFrequencyForOffsetFixed(Fixed offset)
+		{
+			float floatOffset = FIXED2F(offset);
+			return F_CPU / (floatOffset * CPU_CYCLES_PER_SAMPLE);
+		}
+
+		float DetermineSignalPitch()
+		{
+			int m_maxAmplitude = -1;
+			
+			DEBUG_PRINT_STATEMENTS(Serial.write("DetermineSignalPitch()"); Ln(););
+
+			// Sample the signal into our buffer, and track its amplitude.
+			int signalMin = INT_MAX;
+			int signalMax = INT_MIN;
+			m_maxAmplitude = 0;
+			for (int i = 0; i < BUFFER_SIZE; ++i)
+			{
+				g_recordingBuffer[i] = ReadInput8BitsSigned();
+				signalMin = min(g_recordingBuffer[i], signalMin);
+				signalMax = max(g_recordingBuffer[i], signalMax);
+				m_maxAmplitude = max(m_maxAmplitude, abs(signalMax - signalMin));
+			}
+			DEBUG_PRINT_STATEMENTS(
+			{
+				PrintStringInt("signalMin", signalMin); Ln();
+			PrintStringInt("signalMax", signalMax); Ln();
+			PrintStringInt("m_maxAmplitude", m_maxAmplitude); Ln();
+			});
+
+			float result = 0.0f;
+
+			// If we haven't reached the amplitude threshold, don't try to determine pitch.
+			if (m_maxAmplitude < AMPLITUDE_THRESHOLD)
+			{
+				result = -1.0f;
+			}
+
+			// Alright, now try to figure what the ballpark note this is by calculating autocorrellation
+			Fixed bestOffset = 0;
+			Fixed incrementAtBestOffset = 0;
+
+			if (result >= 0.0f)
+			{
+				int numCorrellations = 0;
+				unsigned long sumToDate = 0;
+				bool inThreshold = false;
+				unsigned long bestPrime = ~0;
+				Fixed offsetStep = OFFSET_STEP;
+
+				// If we're in MIDI mode, double the step; this will reduce precision, but increase speed (and thus reduce
+				// latency).
+				//if (m_mode == TunerMode::Midi)
+				//{
+				//	offsetStep <<= 1;
+				//}
+
+				Fixed offsetIncrement = offsetStep;
+				for (Fixed offset = I2FIXED(MIN_SAMPLES); FIXED_INT(offset) < MAX_SAMPLES; offset += offsetIncrement)
+				{
+					unsigned long curCorrellation = GetCorrellationFactorFixed(g_recordingBuffer, offset);
+					++numCorrellations;
+					sumToDate += curCorrellation;
+
+					// Increment the increment right away, so we save the range appropriately for the refined search
+					offsetIncrement += offsetStep;
+
+					unsigned long prime = GetCorrellationFactorPrime(curCorrellation, numCorrellations, sumToDate);
+					if (prime < bestPrime)
+					{
+						bestPrime = prime;
+						bestOffset = offset;
+						incrementAtBestOffset = offsetIncrement;
+					}
+
+					if (prime < PRIME_THRESHOLD)
+					{
+						inThreshold = true;
+					}
+					else if (inThreshold) // was in threshold, now exited, have best minimum in threshold
+					{
+						//found = true;
+						break;
+					}
+				}
+			}
+
+			if (FIXED_INT(bestOffset) == MAX_SAMPLES)
+			{
+				result = -1.0f;
+			}
+
+#define SUBDIVIDE 1
+#if SUBDIVIDE
+			// If we're in tuner mode, try to refine the pitch estimate by interpolating samples, for subsample accuracy.
+			//if ((result >= 0.0f) && (m_mode == TunerMode::Tuner))
+			if (result >= 0.0f)
+			{
+				// Upsample the signal to get a better bearing on the real frequency
+				Fixed minSamples = bestOffset - incrementAtBestOffset;
+				Fixed maxSamples = bestOffset + incrementAtBestOffset;
+				unsigned long bestCorrellation = ~0;
+				bestOffset = 0;
+				for (Fixed offset = minSamples; offset <= maxSamples; ++offset) // step by one
+				{
+					unsigned long curCorrellation = GetCorrellationFactorFixed(g_recordingBuffer, offset);
+					if (curCorrellation < bestCorrellation)
+					{
+						bestCorrellation = curCorrellation;
+						bestOffset = offset;
+					}
+				}
+			}
+#endif
+
+			int const T1 = AMPLITUDE_THRESHOLD;
+			int const T2 = 120;
+
+			if (m_maxAmplitude > T1)
+			{
+				if (result >= 0.0f)
+				{
+					// If we hit the end, assume no periodicity
+					result = GetFrequencyForOffsetFixed(bestOffset);
+				}
+				digitalWrite(kStatusPin, HIGH);
+			}
+			else
+			{
+				result = -1.0f;
+				digitalWrite(kStatusPin, LOW);
+			}
+
+			if (m_maxAmplitude > T2)
+			{
+				digitalWrite(kStatusPin2, HIGH);
+			}
+			else
+			{
+				digitalWrite(kStatusPin2, LOW);
+			}
+
+			return result;
+		}
+
+	private:
+		int m_audioPin;
+	};
+
+	Tuner()
 #if ENABLE_LCD
 		, m_lcd(2, 3, 4, 5, 6, 7, 8)
 #endif // #if ENABLE_LCD
-		, m_tunerNote(-1)
-		, m_maxAmplitude(-1)
+		: m_tunerNote(-1)
 		, m_mode(TunerMode::Tuner)
 	{
 		m_a440.f = DEFAULT_A440;
+
+		for (int i = 0; i < NUM_CHANNELS; ++i)
+		{
+			m_channels[i].SetPin(i);
+		}
 
 	DEBUG_PRINT_STATEMENTS(Serial.write("Constructing tuner..."); Ln(););
 
@@ -751,18 +996,6 @@ public:
 #endif // #if ENABLE_LCD
 	}
 
-	static int const PRESCALER = 0b00000111;
-	static int const PRESCALER_DIVIDE = (1 << PRESCALER);
-	static int const ADC_CLOCKS_PER_ADC_CONVERSION = 13;
-	static unsigned long const CPU_CYCLES_PER_SAMPLE = ADC_CLOCKS_PER_ADC_CONVERSION * PRESCALER_DIVIDE;
-	static unsigned long const SAMPLES_PER_SECOND = F_CPU / CPU_CYCLES_PER_SAMPLE;
-
-	static int const MIN_FREQUENCY = 60;
-	static int const MAX_FREQUENCY = 880;
-	static int const MIN_SAMPLES = SAMPLES_PER_SECOND / MAX_FREQUENCY;
-	static int const MAX_SAMPLES = SAMPLES_PER_SECOND / MIN_FREQUENCY;
-	static int const WINDOW_SIZE = MAX_SAMPLES; //96; // samples
-	static int const BUFFER_SIZE = WINDOW_SIZE + MAX_SAMPLES + 1; // for interpolation
 	static int const AMPLITUDE_THRESHOLD = 30;
 	static int const CORRELLATION_STEP = 2;
 	// For pure sine, 8 is better than 10 or 12, which causes octave errors at higher frequencies
@@ -801,12 +1034,7 @@ public:
 		cbi(ADCSRB, ADTS1);
 		cbi(ADCSRB, ADTS2);
 
-		// Select input channel + set reference to Vcc
-		ADMUX = /*(0 << 6) |*/ (m_audioPin & 0x0f);
-		ADMUX = (1 << 6) | (m_audioPin & 0x0f);
-
-		// Disable other ADC channels (try to reduce noise?)
-		DIDR0 = (0x3F ^ (1 << m_audioPin));
+		ADMUX = (1 << 6);
 
 		// Left-adjust result so we only have to read 8 bits
 		sbi(ADMUX, ADLAR); // right-adjust for 8 bits
@@ -902,25 +1130,6 @@ public:
 		DEBUG_PRINT_STATEMENTS(PrintStringFloat("Loaded tuning", m_a440.f); Ln(););
 	}
 
-	// The following two functions require proper setup in Start()
-	unsigned int ReadInput8BitsUnsigned()
-	{
-		while ((ADCSRA & _BV(ADIF)) == 0)
-		{
-		}
-		unsigned int result = ADCH;
-		sbi(ADCSRA, ADIF);
-		//PrintStringInt("ReadInput8BitsUnsigned", result); Ln();
-		return result;
-	}
-	
-	int ReadInput8BitsSigned()
-	{
-		int result = ReadInput8BitsUnsigned() - 128;
-		//PrintStringInt("ReadInput8BitsSigned", result); Ln();
-		return result;
-	}
-	
 	// Given a MIDI note index, returns the corresponding index into the global string array of note names.
 	int GetNoteNameIndex(int note)
 	{
@@ -1097,186 +1306,6 @@ public:
 #error Unknown temperament!
 #endif // #if EQUAL_TEMPERAMENT
 
-	unsigned long GetCorrellationFactorFixed(char* buffer, Fixed fixedOffset)
-	{
-		unsigned long result = 0;
-		int integer = FIXED_INT(fixedOffset);
-		int frac = FIXED_FRAC(fixedOffset);
-		int correllationStep = CORRELLATION_STEP;
-
-		// If we're in MIDI mode, lower the precision to gain speed.
-		//if (m_mode == TunerMode::Midi)
-		//{
-		//	correllationStep <<= 1;
-		//}
-
-		for (int i = 0; i < WINDOW_SIZE; i += correllationStep)
-		{
-			// Note this is done with 16-bit math; this is slower, but gives more precision.  In tests, using 8-bit
-			// math did not yield sufficient precision.
-			int a = buffer[i];
-			int b = InterpolateChar(buffer[i + integer], buffer[i + integer + 1], frac);
-			result += abs(b - a);			
-		}
-		return result;
-	}
-
-	unsigned long GetCorrellationFactorPrime(unsigned long currentCorrellation, int numToDate, unsigned long sumToDate)
-	{
-		if (numToDate == 0)
-		{
-			return FIXED_ONE;
-		}
-		else
-		{
-			return ((currentCorrellation << FIXED_SHIFT) * numToDate) / sumToDate;
-		}
-	}
-
-	// Compute the frequency corresponding to a given a fixed-point offset into our sampling buffer (usually where
-	// the best/minimal autocorrellation was achieved).
-	float GetFrequencyForOffsetFixed(Fixed offset)
-	{
-		float floatOffset = FIXED2F(offset);
-		return F_CPU / (floatOffset * CPU_CYCLES_PER_SAMPLE);
-	}
-
-	float DetermineSignalPitch()
-	{
-		DEBUG_PRINT_STATEMENTS(Serial.write("DetermineSignalPitch()"); Ln(););
-
-		// Sample the signal into our buffer, and track its amplitude.
-		int signalMin = INT_MAX;
-		int signalMax = INT_MIN;
-		m_maxAmplitude = 0;
-		for (int i = 0; i < BUFFER_SIZE; ++i)
-		{
-			m_buffer[i] = ReadInput8BitsSigned();
-			signalMin = min(m_buffer[i], signalMin);
-			signalMax = max(m_buffer[i], signalMax);
-			m_maxAmplitude = max(m_maxAmplitude, abs(signalMax - signalMin));
-		}
-		DEBUG_PRINT_STATEMENTS(
-		{
-			PrintStringInt("signalMin", signalMin); Ln();
-			PrintStringInt("signalMax", signalMax); Ln();
-			PrintStringInt("m_maxAmplitude", m_maxAmplitude); Ln();
-		});
-
-		float result = 0.0f;
-
-		// If we haven't reached the amplitude threshold, don't try to determine pitch.
-		if (m_maxAmplitude < AMPLITUDE_THRESHOLD)
-		{
-			result = -1.0f;
-		}
-
-		// Alright, now try to figure what the ballpark note this is by calculating autocorrellation
-		Fixed bestOffset = 0;
-		Fixed incrementAtBestOffset = 0;
-
-		if (result >= 0.0f)
-		{
-			int numCorrellations = 0;
-			unsigned long sumToDate = 0;
-			bool inThreshold = false;		
-			unsigned long bestPrime = ~0;
-			Fixed offsetStep = OFFSET_STEP;
-			
-			// If we're in MIDI mode, double the step; this will reduce precision, but increase speed (and thus reduce
-			// latency).
-			//if (m_mode == TunerMode::Midi)
-			//{
-			//	offsetStep <<= 1;
-			//}
-			
-			Fixed offsetIncrement = offsetStep;
-			for (Fixed offset = I2FIXED(MIN_SAMPLES); FIXED_INT(offset) < MAX_SAMPLES; offset += offsetIncrement)
-			{
-				unsigned long curCorrellation = GetCorrellationFactorFixed(m_buffer, offset);
-				++numCorrellations;
-				sumToDate += curCorrellation;
-
-				// Increment the increment right away, so we save the range appropriately for the refined search
-				offsetIncrement += offsetStep;
-
-				unsigned long prime = GetCorrellationFactorPrime(curCorrellation, numCorrellations, sumToDate);
-				if (prime < bestPrime)
-				{
-					bestPrime = prime;
-					bestOffset = offset;
-					incrementAtBestOffset = offsetIncrement;
-				}
-
-				if (prime < PRIME_THRESHOLD)
-				{
-					inThreshold = true;
-				}
-				else if (inThreshold) // was in threshold, now exited, have best minimum in threshold
-				{
-					//found = true;
-					break;
-				}
-			}
-		}
-
-		if (FIXED_INT(bestOffset) == MAX_SAMPLES)
-		{
-			result = -1.0f;
-		}
-
-#define SUBDIVIDE 1
-#if SUBDIVIDE
-		// If we're in tuner mode, try to refine the pitch estimate by interpolating samples, for subsample accuracy.
-		if ((result >= 0.0f) && (m_mode == TunerMode::Tuner))
-		{
-			// Upsample the signal to get a better bearing on the real frequency
-			Fixed minSamples = bestOffset - incrementAtBestOffset;
-			Fixed maxSamples = bestOffset + incrementAtBestOffset;
-			unsigned long bestCorrellation = ~0;
-			bestOffset = 0;
-			for (Fixed offset = minSamples; offset <= maxSamples; ++offset) // step by one
-			{
-				unsigned long curCorrellation = GetCorrellationFactorFixed(m_buffer, offset);
-				if (curCorrellation < bestCorrellation)
-				{
-					bestCorrellation = curCorrellation;
-					bestOffset = offset;
-				}
-			}
-		}
-#endif
-
-		int const T1 = AMPLITUDE_THRESHOLD;
-		int const T2 = 120;
-
-		if (m_maxAmplitude > T1)
-		{
-			if (result >= 0.0f)
-			{
-				// If we hit the end, assume no periodicity
-				result = GetFrequencyForOffsetFixed(bestOffset);
-			}
-			digitalWrite(kStatusPin, HIGH); 
-		}
-		else
-		{
-			result = -1.0f;
-			digitalWrite(kStatusPin, LOW); 
-		}
-		
-		if (m_maxAmplitude > T2)
-		{
-			digitalWrite(kStatusPin2, HIGH); 
-		}
-		else
-		{
-			digitalWrite(kStatusPin2, LOW); 
-		}
-
-		return result;
-	}
-
 	void RenderWideGlyphForNote(int note)
 	{
 #if ENABLE_LCD
@@ -1412,7 +1441,6 @@ public:
 #endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
 
 		float filteredFrequency = -1.0f;
-		int noteRepeatCount = 0;
 
 		while(1)
 		{
@@ -1459,7 +1487,7 @@ public:
 #endif // #if ENABLE_LCD
 
 			DEBUG_PRINT_STATEMENTS(Serial.write("DetermineSignalPitch"); Ln(););
-			float instantFrequency = DetermineSignalPitch();
+			float instantFrequency = m_channels[0].DetermineSignalPitch();
 #if FAKE_FREQUENCY
 			static float t = 0.0f;
 			t += 0.001f;
@@ -1560,9 +1588,8 @@ public:
 
 		Stop();
 	}
+
 private:
-	int m_audioPin;
-	char m_buffer[BUFFER_SIZE];
 #if ENABLE_LCD
 	LiquidCrystal m_lcd;
 #endif // #if ENABLE_LCD
@@ -1576,12 +1603,10 @@ private:
 	STATIC_ASSERT(sizeof(unsigned long) == sizeof(float)); // verify that things match up for the above union
 	
 	int m_tunerNote;
-	int m_maxAmplitude;
 	TunerMode::Type m_mode;
-};
 
-#undef ALWAYSPRINT
-#undef DEBUGPRINT
+	Channel m_channels[NUM_CHANNELS];
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 // Main stuff
@@ -1599,6 +1624,6 @@ void setup()                                        // run once, when the sketch
 
 void loop()
 {
-	Tuner tuner(5); // tried ADC pins 0, 3, 5, none is better
+	Tuner tuner;
 	tuner.Go();
 } 
