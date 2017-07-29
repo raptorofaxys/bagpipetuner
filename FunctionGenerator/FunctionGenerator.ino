@@ -128,8 +128,9 @@ public:
 		if (m_analogReadDelay <= 0)
 		{
 			m_analogReadDelay = 65000;
-			int inValue = analogRead(m_inputPin);
-			int frequency = map(inValue, 0, 1023, 40, 1000);
+			//int inValue = analogRead(m_inputPin);
+			//int frequency = map(inValue, 0, 1023, 40, 1000);
+			int frequency = 170;
 
 			// one million us in a second, two toggles per cycle
 			m_toggleDeltaUs = 500000UL / frequency;
@@ -189,8 +190,8 @@ void loop()
 		g_lastUs = g_nowUs;
 
 		f1.Update();
-		f2.Update();
-		f3.Update();
-		f4.Update();
+		//f2.Update();
+		//f3.Update();
+		//f4.Update();
 	}
 }
