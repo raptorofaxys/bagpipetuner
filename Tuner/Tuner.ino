@@ -44,7 +44,7 @@ template<int N> struct PrintInt;
 // a bit of code, it can hopefully be trivially stripped.
 #define STATIC_ASSERT3(x, line) void func##line(static_assert_<x>) { }
 #define STATIC_ASSERT2(x, line) STATIC_ASSERT3(x, line)
-#define STATIC_ASSERT(x) STATIC_ASSERT2(x, __LINE__)
+#define STATIC_ASSERT(x) STATIC_ASSERT2((x), __LINE__)
 template <bool N> struct static_assert_;
 template<> struct static_assert_<true> {};
 
@@ -721,18 +721,24 @@ namespace TunerMode
 	};
 }
 
-static int const PRESCALER = 0b00000111;
+static int const PRESCALER = 0b00000101;
 static int const PRESCALER_DIVIDE = (1 << PRESCALER);
 static int const ADC_CLOCKS_PER_ADC_CONVERSION = 13;
 static unsigned long const CPU_CYCLES_PER_SAMPLE = ADC_CLOCKS_PER_ADC_CONVERSION * PRESCALER_DIVIDE;
 static unsigned long const SAMPLES_PER_SECOND = F_CPU / CPU_CYCLES_PER_SAMPLE;
 
 static int const MIN_FREQUENCY = 60;
-static int const MAX_FREQUENCY = 880;
+static int const MAX_FREQUENCY = 1100;
 static int const MIN_SAMPLES = SAMPLES_PER_SECOND / MAX_FREQUENCY;
 static int const MAX_SAMPLES = SAMPLES_PER_SECOND / MIN_FREQUENCY;
 static int const WINDOW_SIZE = MAX_SAMPLES; //96; // samples
 static int const BUFFER_SIZE = WINDOW_SIZE + MAX_SAMPLES + 1; // for interpolation
+//STATIC_ASSERT(true);
+STATIC_ASSERT((SAMPLES_PER_SECOND / 2) > MAX_FREQUENCY);
+
+template <unsigned long i> struct PrintN;
+//PrintN<SAMPLES_PER_SECOND> n1;
+//PrintN<BUFFER_SIZE> n1;
 
 // This buffer is now global because we need to the compiler to use faster addressing modes that are only available with
 // fixed memory addresses. The buffer is now shared between the different tuner channels.
@@ -781,6 +787,8 @@ public:
 			return result;
 		}
 
+		//@TODO: change all buffer pointers to use the global buffer
+		//@TODO: use one function for integer offsets, another for fractional? no need for interpolation? does that make sense with the fixed-point math?
 		unsigned long GetCorrellationFactorFixed(char* buffer, Fixed fixedOffset)
 		{
 			unsigned long result = 0;
@@ -825,7 +833,7 @@ public:
 			return F_CPU / (floatOffset * CPU_CYCLES_PER_SAMPLE);
 		}
 
-		float DetermineSignalPitch()
+		float DetermineSignalPitch(Fixed& finalBestOffset)
 		{
 			int m_maxAmplitude = -1;
 			
@@ -842,11 +850,22 @@ public:
 				signalMax = max(g_recordingBuffer[i], signalMax);
 				m_maxAmplitude = max(m_maxAmplitude, abs(signalMax - signalMin));
 			}
+
+			//for (int i = 0; i < BUFFER_SIZE; ++i)
+			//{
+			//	DEFAULT_PRINT->print(static_cast<int>(g_recordingBuffer[i]));
+			//	if (i != BUFFER_SIZE - 1)
+			//	{
+			//		DEFAULT_PRINT->print(",");
+			//	}
+			//}
+			//Ln();
+
 			DEBUG_PRINT_STATEMENTS(
 			{
 				PrintStringInt("signalMin", signalMin); Ln();
-			PrintStringInt("signalMax", signalMax); Ln();
-			PrintStringInt("m_maxAmplitude", m_maxAmplitude); Ln();
+				PrintStringInt("signalMax", signalMax); Ln();
+				PrintStringInt("m_maxAmplitude", m_maxAmplitude); Ln();
 			});
 
 			float result = 0.0f;
@@ -913,7 +932,7 @@ public:
 
 #define SUBDIVIDE 1
 #if SUBDIVIDE
-			// If we're in tuner mode, try to refine the pitch estimate by interpolating samples, for subsample accuracy.
+			// If we're not in tuner mode, try to refine the pitch estimate by interpolating samples, for subsample accuracy.
 			//if ((result >= 0.0f) && (m_mode == TunerMode::Tuner))
 			if (result >= 0.0f)
 			{
@@ -922,7 +941,7 @@ public:
 				Fixed maxSamples = bestOffset + incrementAtBestOffset;
 				unsigned long bestCorrellation = ~0;
 				bestOffset = 0;
-				for (Fixed offset = minSamples; offset <= maxSamples; ++offset) // step by one
+				for (Fixed offset = minSamples; offset <= maxSamples; ++offset) // step by one, which is the smallest possible fixed-point step
 				{
 					unsigned long curCorrellation = GetCorrellationFactorFixed(g_recordingBuffer, offset);
 					if (curCorrellation < bestCorrellation)
@@ -933,6 +952,7 @@ public:
 				}
 			}
 #endif
+			finalBestOffset = bestOffset;
 
 			int const T1 = AMPLITUDE_THRESHOLD;
 			int const T2 = 120;
@@ -944,22 +964,22 @@ public:
 					// If we hit the end, assume no periodicity
 					result = GetFrequencyForOffsetFixed(bestOffset);
 				}
-				digitalWrite(kStatusPin, HIGH);
+				//digitalWrite(kStatusPin, HIGH);
 			}
 			else
 			{
 				result = -1.0f;
-				digitalWrite(kStatusPin, LOW);
+				//digitalWrite(kStatusPin, LOW);
 			}
 
-			if (m_maxAmplitude > T2)
-			{
-				digitalWrite(kStatusPin2, HIGH);
-			}
-			else
-			{
-				digitalWrite(kStatusPin2, LOW);
-			}
+			//if (m_maxAmplitude > T2)
+			//{
+			//	digitalWrite(kStatusPin2, HIGH);
+			//}
+			//else
+			//{
+			//	digitalWrite(kStatusPin2, LOW);
+			//}
 
 			return result;
 		}
@@ -982,7 +1002,7 @@ public:
 			m_channels[i].SetPin(i);
 		}
 
-	DEBUG_PRINT_STATEMENTS(Serial.write("Constructing tuner..."); Ln(););
+		DEBUG_PRINT_STATEMENTS(Serial.write("Constructing tuner..."); Ln(););
 
 #if ENABLE_LCD
 		g_lcd = &m_lcd;
@@ -1487,7 +1507,8 @@ public:
 #endif // #if ENABLE_LCD
 
 			DEBUG_PRINT_STATEMENTS(Serial.write("DetermineSignalPitch"); Ln(););
-			float instantFrequency = m_channels[0].DetermineSignalPitch();
+			Fixed bestOffset;
+			float instantFrequency = m_channels[0].DetermineSignalPitch(bestOffset);
 #if FAKE_FREQUENCY
 			static float t = 0.0f;
 			t += 0.001f;
@@ -1561,6 +1582,8 @@ public:
 			Serial.print("\x1B[0m");
 #endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
 			Serial.print("-----"); Ln();
+			PrintStringInt("bestOffset (int)", bestOffset); Ln();
+			PrintStringFloat("bestOffset (float)", FIXED2F(bestOffset)); Ln();
 			PrintStringFloat("Instant freq", instantFrequency); Ln();
 			PrintStringFloat("Filtered freq", filteredFrequency); Ln();
 			PrintStringInt("MIDI note", m_tunerNote); Ln();
