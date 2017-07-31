@@ -704,6 +704,7 @@ static int const FIXED_MASK_HI = ~((1 << FIXED_SHIFT_HI) - 1);
 #define		F2FIXED(x) ((Fixed) ((x) * (1 << FIXED_SHIFT)))
 #define		FIXED2I(x) ((x) >> FIXED_SHIFT)
 #define		FIXED2F(x) ((x) / float(1 << FIXED_SHIFT))
+static int const PRIME_SHIFT = 8;
 
 // Linearly interpolates between two 8-bit signed values.
 char InterpolateChar(char a, char b, char tFrac)
@@ -789,20 +790,20 @@ public:
 
 		//@TODO: change all buffer pointers to use the global buffer
 		//@TODO: use one function for integer offsets, another for fractional? no need for interpolation? does that make sense with the fixed-point math?
-		unsigned long GetCorrellationFactorFixed(char* buffer, Fixed fixedOffset)
+		unsigned long GetCorrelationFactorFixed(char* buffer, Fixed fixedOffset)
 		{
 			unsigned long result = 0;
 			int integer = FIXED_INT(fixedOffset);
 			int frac = FIXED_FRAC(fixedOffset);
-			int correllationStep = CORRELLATION_STEP;
+			int correlationStep = CORRELATION_STEP;
 
 			// If we're in MIDI mode, lower the precision to gain speed.
 			//if (m_mode == TunerMode::Midi)
 			//{
-			//	correllationStep <<= 1;
+			//	correlationStep <<= 1;
 			//}
 
-			for (int i = 0; i < WINDOW_SIZE; i += correllationStep)
+			for (int i = 0; i < WINDOW_SIZE; i += correlationStep)
 			{
 				// Note this is done with 16-bit math; this is slower, but gives more precision.  In tests, using 8-bit
 				// math did not yield sufficient precision.
@@ -813,7 +814,7 @@ public:
 			return result;
 		}
 
-		unsigned long GetCorrellationFactorPrime(unsigned long currentCorrellation, int numToDate, unsigned long sumToDate)
+		unsigned long GetCorrelationFactorPrime(unsigned long currentCorrellation, int numToDate, unsigned long sumToDate)
 		{
 			if (numToDate == 0)
 			{
@@ -825,14 +826,32 @@ public:
 			}
 		}
 
+		unsigned long GetCorrelationFactorPrime2(unsigned long currentCorrelation, int numToDate, unsigned long sumToDate)
+		{
+			// Here we don't care about the absolute value; we're just comparing values at various points on the curve to find a local minimum. The default fixed shift
+			// isn't quite large enough to produce values which will be meaningful when divided by the potentially large sumToDate, so we increase the just for this
+			// function.
+			//if (numToDate == 0)
+			//{
+			//	//return (1 << PRIME_SHIFT);
+			//	return 1;
+			//}
+			//else
+			//{
+				//return ((currentCorrelation << PRIME_SHIFT) * numToDate) / (sumToDate >> 8);
+				return (currentCorrelation * numToDate) / (sumToDate >> 8);
+			//}
+		}
+
 		// Compute the frequency corresponding to a given a fixed-point offset into our sampling buffer (usually where
-		// the best/minimal autocorrellation was achieved).
+		// the best/minimal autocorrelation was achieved).
 		float GetFrequencyForOffsetFixed(Fixed offset)
 		{
 			float floatOffset = FIXED2F(offset);
 			return F_CPU / (floatOffset * CPU_CYCLES_PER_SAMPLE);
 		}
 
+		//float DetermineSignalPitch(Fixed& finalBestOffset, int& totalNumCorrelations)
 		float DetermineSignalPitch(Fixed& finalBestOffset)
 		{
 			int m_maxAmplitude = -1;
@@ -876,13 +895,16 @@ public:
 				result = -1.0f;
 			}
 
-			// Alright, now try to figure what the ballpark note this is by calculating autocorrellation
+			// Alright, now try to figure what the ballpark note this is by calculating autocorrelation
 			Fixed bestOffset = 0;
+#define SUBDIVIDE 1
+#if SUBDIVIDE
 			Fixed incrementAtBestOffset = 0;
+#endif // #if SUBDIVIDE
 
 			if (result >= 0.0f)
 			{
-				int numCorrellations = 0;
+				int numCorrelations = 0;
 				unsigned long sumToDate = 0;
 				bool inThreshold = false;
 				unsigned long bestPrime = ~0;
@@ -896,21 +918,38 @@ public:
 				//}
 
 				Fixed offsetIncrement = offsetStep;
-				for (Fixed offset = I2FIXED(MIN_SAMPLES); FIXED_INT(offset) < MAX_SAMPLES; offset += offsetIncrement)
+				Fixed maxSamplesFixed = I2FIXED(MAX_SAMPLES);
+				for (Fixed offset = I2FIXED(MIN_SAMPLES); offset < maxSamplesFixed; offset += offsetIncrement)
 				{
-					unsigned long curCorrellation = GetCorrellationFactorFixed(g_recordingBuffer, offset);
-					++numCorrellations;
-					sumToDate += curCorrellation;
+					unsigned long curCorrelation = GetCorrelationFactorFixed(g_recordingBuffer, offset);
+					++numCorrelations;
+					sumToDate += curCorrelation;
 
 					// Increment the increment right away, so we save the range appropriately for the refined search
+					////////////////////////////////////////////////////////////////////
+					//@TODO: PUT THIS ADDITION BACK IN
+					////////////////////////////////////////////////////////////////////
 					offsetIncrement += offsetStep;
 
-					unsigned long prime = GetCorrellationFactorPrime(curCorrellation, numCorrellations, sumToDate);
+					unsigned long prime = GetCorrelationFactorPrime(curCorrelation, numCorrelations, sumToDate);
+					//DEFAULT_PRINT->print(offset);
+					//DEFAULT_PRINT->print(", ");
+					//DEFAULT_PRINT->print(curCorrelation);
+					//DEFAULT_PRINT->print(", ");
+					//DEFAULT_PRINT->print(numCorrelations);
+					//DEFAULT_PRINT->print(", ");
+					//DEFAULT_PRINT->print(sumToDate);
+					//DEFAULT_PRINT->print(", ");
+					//DEFAULT_PRINT->print(prime);
+					//Ln();
+
 					if (prime < bestPrime)
 					{
 						bestPrime = prime;
 						bestOffset = offset;
+#if SUBDIVIDE
 						incrementAtBestOffset = offsetIncrement;
+#endif // #if SUBDIVIDE
 					}
 
 					if (prime < PRIME_THRESHOLD)
@@ -920,6 +959,9 @@ public:
 					else if (inThreshold) // was in threshold, now exited, have best minimum in threshold
 					{
 						//found = true;
+						////////////////////////////////////////////////////////////////////
+						//@TODO: PUT THIS BREAK BACK IN
+						////////////////////////////////////////////////////////////////////
 						break;
 					}
 				}
@@ -930,7 +972,6 @@ public:
 				result = -1.0f;
 			}
 
-#define SUBDIVIDE 1
 #if SUBDIVIDE
 			// If we're not in tuner mode, try to refine the pitch estimate by interpolating samples, for subsample accuracy.
 			//if ((result >= 0.0f) && (m_mode == TunerMode::Tuner))
@@ -939,23 +980,25 @@ public:
 				// Upsample the signal to get a better bearing on the real frequency
 				Fixed minSamples = bestOffset - incrementAtBestOffset;
 				Fixed maxSamples = bestOffset + incrementAtBestOffset;
-				unsigned long bestCorrellation = ~0;
+				unsigned long bestCorrelation = ~0;
 				bestOffset = 0;
 				for (Fixed offset = minSamples; offset <= maxSamples; ++offset) // step by one, which is the smallest possible fixed-point step
 				{
-					unsigned long curCorrellation = GetCorrellationFactorFixed(g_recordingBuffer, offset);
-					if (curCorrellation < bestCorrellation)
+					//++numCorrelations;
+					unsigned long curCorrelation = GetCorrelationFactorFixed(g_recordingBuffer, offset);
+					if (curCorrelation < bestCorrelation)
 					{
-						bestCorrellation = curCorrellation;
+						bestCorrelation = curCorrelation;
 						bestOffset = offset;
 					}
 				}
 			}
-#endif
+#endif // #if SUBDIVIDE
 			finalBestOffset = bestOffset;
+			//totalNumCorrelations = numCorrelations;
 
 			int const T1 = AMPLITUDE_THRESHOLD;
-			int const T2 = 120;
+			//int const T2 = 120;
 
 			if (m_maxAmplitude > T1)
 			{
@@ -1017,11 +1060,14 @@ public:
 	}
 
 	static int const AMPLITUDE_THRESHOLD = 30;
-	static int const CORRELLATION_STEP = 2;
+	static int const CORRELATION_STEP = 2;
 	// For pure sine, 8 is better than 10 or 12, which causes octave errors at higher frequencies
 	// (>400 for 10, >350 for 12).
 	// For guitar, sweet spot is between 1/2 and 1/3
-	static int const PRIME_THRESHOLD = (FIXED_ONE * 5) / 12;
+	static int const PRIME_THRESHOLD = (FIXED_ONE * 5) / 12; //@TODO: get rid of this notion?
+	////////////////////////////////////////////////////////////////////
+	//@TODO: PUT THIS BACK TO 1
+	////////////////////////////////////////////////////////////////////
 	static int const OFFSET_STEP = 1;
 	
 	void Start()
@@ -1087,6 +1133,8 @@ public:
 
 		LoadTuning();
 		//TunePitch();
+
+		//m_lastMicros = 0;
 	}
 
 	void Stop()
@@ -1508,6 +1556,8 @@ public:
 
 			DEBUG_PRINT_STATEMENTS(Serial.write("DetermineSignalPitch"); Ln(););
 			Fixed bestOffset;
+			//int numCorrelations = 0;
+			//float instantFrequency = m_channels[0].DetermineSignalPitch(bestOffset, numCorrelations);
 			float instantFrequency = m_channels[0].DetermineSignalPitch(bestOffset);
 #if FAKE_FREQUENCY
 			static float t = 0.0f;
@@ -1578,12 +1628,21 @@ public:
 
 #if PRINT_FREQUENCY_TO_SERIAL
 #if PRINT_FREQUENCY_TO_SERIAL_VT100
+			//unsigned long nowMicros = micros();
+			//unsigned long deltaMicros = nowMicros - m_lastMicros;
+
+			//float sps = 1000000.0f / deltaMicros;
+
+			//m_lastMicros = nowMicros;
+
 			MoveCursor(0, 0);
 			Serial.print("\x1B[0m");
 #endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
 			Serial.print("-----"); Ln();
-			PrintStringInt("bestOffset (int)", bestOffset); Ln();
-			PrintStringFloat("bestOffset (float)", FIXED2F(bestOffset)); Ln();
+			//PrintStringFloat("SPS ", sps); Ln();
+			PrintStringInt("ofs (int)", bestOffset); Ln();
+			PrintStringFloat("ofs (float)", FIXED2F(bestOffset)); Ln();
+			//PrintStringInt("numCorrelations", numCorrelations); Ln();
 			PrintStringFloat("Instant freq", instantFrequency); Ln();
 			PrintStringFloat("Filtered freq", filteredFrequency); Ln();
 			PrintStringInt("MIDI note", m_tunerNote); Ln();
@@ -1629,6 +1688,7 @@ private:
 	TunerMode::Type m_mode;
 
 	Channel m_channels[NUM_CHANNELS];
+	//unsigned long m_lastMicros;
 };
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1638,7 +1698,7 @@ private:
 void setup()                                        // run once, when the sketch starts
 {
 	Serial.begin(115200); // for debugging
-	Serial.println("Setup hardwareserial.");
+	//Serial.println("Setup hardwareserial.");
 	pinMode(kStatusPin, OUTPUT);            // sets the digital pin as output
 	pinMode(kStatusPin2, OUTPUT);            // sets the digital pin as output
 	digitalWrite(kStatusPin, LOW); 
