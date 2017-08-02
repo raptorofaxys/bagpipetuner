@@ -945,6 +945,7 @@ public:
 
 			bool doPrint = false;
 			Fixed bestOffset = ~0;
+			Fixed maxBestOffset = ~0;
 			for (;;)
 			{
 				// Alright, now try to figure what the ballpark note this is by calculating autocorrelation
@@ -957,6 +958,9 @@ public:
 				unsigned long correlationDipThreshold = 0;
 				unsigned long bestCorrelation = ~0;
 				const Fixed offsetToStartPreciseSampling = I2FIXED(MIN_SAMPLES - 2);
+				unsigned long lastCorrelation = ~0;
+
+				Fixed offsetStep = OFFSET_STEP;
 
 				// We start a bit before the minimum offset to prime the thresholds
 				//for (Fixed offset = max(offsetAtMinFrequency - OFFSET_STEP * 4, 0); offset < maxSamplesFixed; offset += OFFSET_STEP)
@@ -970,13 +974,13 @@ public:
 						//PrintStringLong("gcf", curCorrelation); DEFAULT_PRINT->print(" "); Ln();
 						DEFAULT_PRINT->print(offset); DEFAULT_PRINT->print(", ");
 						DEFAULT_PRINT->print(curCorrelation); DEFAULT_PRINT->print(", ");
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 4) * 4); DEFAULT_PRINT->print(", ");
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 8) * 8); DEFAULT_PRINT->print(", ");
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 16) * 16); DEFAULT_PRINT->print(", ");
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 24) * 24); DEFAULT_PRINT->print(", ");
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 32) * 32); DEFAULT_PRINT->print(", ");
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 64) * 64); DEFAULT_PRINT->print(", ");
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 96) * 96); DEFAULT_PRINT->print(", ");
+						DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 4) * 4); DEFAULT_PRINT->print(", ");
+						DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 8) * 8); DEFAULT_PRINT->print(", ");
+						DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 16) * 16); DEFAULT_PRINT->print(", ");
+						DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 24) * 24); DEFAULT_PRINT->print(", ");
+						DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 32) * 32); DEFAULT_PRINT->print(", ");
+						DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 64) * 64); DEFAULT_PRINT->print(", ");
+						DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 96) * 96); DEFAULT_PRINT->print(", ");
 						DEFAULT_PRINT->print(maxCorrelation); DEFAULT_PRINT->print(", ");
 						DEFAULT_PRINT->print(correlationDipThreshold);
 						Ln();
@@ -1002,7 +1006,12 @@ public:
 						{
 							bestCorrelation = curCorrelation;
 							bestOffset = offset;
+							maxBestOffset = offset;
 							//DEFAULT_PRINT->print("best!"); Ln();
+						}
+						else if (curCorrelation == bestCorrelation)
+						{
+							maxBestOffset = offset;
 						}
 
 						inThreshold = true;
@@ -1014,12 +1023,23 @@ public:
 						break;
 					}
 
-					offset += OFFSET_STEP;
+					if (curCorrelation >= lastCorrelation)
+					{
+						++offsetStep;
+					}
+					else
+					{
+						offsetStep = OFFSET_STEP;
+					}
+
+					offset += offsetStep;
+					lastCorrelation = curCorrelation;
 				}
 
 				if (doPrint)
 				{
 					PrintStringInt("bestOffset", bestOffset); Ln();
+					PrintStringInt("maxBestOffset", maxBestOffset); Ln();
 					PrintStringInt("maxSamplesFixed", maxSamplesFixed); Ln();
 				}
 
@@ -1050,14 +1070,14 @@ public:
 			}
 		}
 #endif
-				if (doPrint || GetFrequencyForOffsetFixed(bestOffset) > 700.0f)
+				//if (doPrint)// || GetFrequencyForOffsetFixed(bestOffset) > 700.0f)
 				{
 					break;
 				}
 				doPrint = true;
 			}
 
-			float result = GetFrequencyForOffsetFixed(bestOffset);
+			float result = GetFrequencyForOffsetFixed((bestOffset + maxBestOffset) >> 1);
 			return result;
 		}
 
