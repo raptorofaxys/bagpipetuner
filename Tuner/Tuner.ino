@@ -418,6 +418,22 @@ void PrintStringFloat(char const* s, float f, int decimals = 5, Print* p = DEFAU
 {
 	p->print(s);
 	p->print(": ");
+	if (f < 10000.0f)
+	{
+		p->print(" ");
+	}
+	if (f < 1000.0f)
+	{
+		p->print(" ");
+	}
+	if (f < 100.0f)
+	{
+		p->print(" ");
+	}
+	if (f < 10.0f)
+	{
+		p->print(" ");
+	}
 	PrintFloat(f, decimals);
 }
 
@@ -740,6 +756,8 @@ STATIC_ASSERT((SAMPLES_PER_SECOND / 2) > MAX_FREQUENCY);
 template <unsigned long i> struct PrintN;
 //PrintN<SAMPLES_PER_SECOND> n1;
 //PrintN<BUFFER_SIZE> n1;
+//PrintN<WINDOW_SIZE> n1;
+//PrintN<MIN_SAMPLES> n1;
 
 // This buffer is now global because we need to the compiler to use faster addressing modes that are only available with
 // fixed memory addresses. The buffer is now shared between the different tuner channels.
@@ -790,12 +808,35 @@ public:
 
 		//@TODO: change all buffer pointers to use the global buffer
 		//@TODO: use one function for integer offsets, another for fractional? no need for interpolation? does that make sense with the fixed-point math?
-		unsigned long GetCorrelationFactorFixed(char* buffer, Fixed fixedOffset)
+		//unsigned long GetCorrelationFactorFixed(char* buffer, Fixed fixedOffset)
+		//{
+		//	unsigned long result = 0;
+		//	int integer = FIXED_INT(fixedOffset);
+		//	int frac = FIXED_FRAC(fixedOffset);
+		//	int correlationStep = s_correlationStep;
+
+		//	// If we're in MIDI mode, lower the precision to gain speed.
+		//	//if (m_mode == TunerMode::Midi)
+		//	//{
+		//	//	correlationStep <<= 1;
+		//	//}
+
+		//	for (int i = 0; i < WINDOW_SIZE; i += correlationStep)
+		//	{
+		//		// Note this is done with 16-bit math; this is slower, but gives more precision.  In tests, using 8-bit
+		//		// math did not yield sufficient precision.
+		//		int a = buffer[i];
+		//		int b = InterpolateChar(buffer[i + integer], buffer[i + integer + 1], frac);
+		//		result += abs(b - a);
+		//	}
+		//	return result;
+		//}
+		
+		unsigned long GetCorrelationFactorFixed(Fixed fixedOffset, int correlationStep)
 		{
 			unsigned long result = 0;
 			int integer = FIXED_INT(fixedOffset);
 			int frac = FIXED_FRAC(fixedOffset);
-			int correlationStep = CORRELATION_STEP;
 
 			// If we're in MIDI mode, lower the precision to gain speed.
 			//if (m_mode == TunerMode::Midi)
@@ -803,12 +844,16 @@ public:
 			//	correlationStep <<= 1;
 			//}
 
-			for (int i = 0; i < WINDOW_SIZE; i += correlationStep)
+			char* pA = &g_recordingBuffer[0];
+			char* pB = &g_recordingBuffer[integer];
+			char* pB2 = pB + 1;
+
+			for (int i = 0; i < WINDOW_SIZE; i += correlationStep, pA += correlationStep, pB += correlationStep, pB2 += correlationStep)
 			{
-				// Note this is done with 16-bit math; this is slower, but gives more precision.  In tests, using 8-bit
+				// Note this is done with 16-bit math; this is slower, but gives more precision.  In tests, using 8-bit fixed-point
 				// math did not yield sufficient precision.
-				int a = buffer[i];
-				int b = InterpolateChar(buffer[i + integer], buffer[i + integer + 1], frac);
+				int a = *pA;
+				int b = InterpolateChar(*pB, *pB2, frac);
 				result += abs(b - a);
 			}
 			return result;
@@ -816,14 +861,14 @@ public:
 
 		unsigned long GetCorrelationFactorPrime(unsigned long currentCorrellation, int numToDate, unsigned long sumToDate)
 		{
-			if (numToDate == 0)
-			{
-				return FIXED_ONE;
-			}
-			else
-			{
+			//if (numToDate == 0)
+			//{
+			//	return FIXED_ONE;
+			//}
+			//else
+			//{
 				return ((currentCorrellation << FIXED_SHIFT) * numToDate) / sumToDate;
-			}
+			//}
 		}
 
 		unsigned long GetCorrelationFactorPrime2(unsigned long currentCorrelation, int numToDate, unsigned long sumToDate)
@@ -851,25 +896,29 @@ public:
 			return F_CPU / (floatOffset * CPU_CYCLES_PER_SAMPLE);
 		}
 
-		//float DetermineSignalPitch(Fixed& finalBestOffset, int& totalNumCorrelations)
-		float DetermineSignalPitch(Fixed& finalBestOffset)
+		float DetermineSignalPitch()
 		{
-			int m_maxAmplitude = -1;
+			//DEFAULT_PRINT->print("DetermineSignalPitch()"); Ln();
+			static int const AMPLITUDE_THRESHOLD = 30;
 			
 			DEBUG_PRINT_STATEMENTS(Serial.write("DetermineSignalPitch()"); Ln(););
 
 			// Sample the signal into our buffer, and track its amplitude.
 			int signalMin = INT_MAX;
 			int signalMax = INT_MIN;
-			m_maxAmplitude = 0;
+			int maxAmplitude = -1;
 			for (int i = 0; i < BUFFER_SIZE; ++i)
 			{
 				g_recordingBuffer[i] = ReadInput8BitsSigned();
 				signalMin = min(g_recordingBuffer[i], signalMin);
 				signalMax = max(g_recordingBuffer[i], signalMax);
-				m_maxAmplitude = max(m_maxAmplitude, abs(signalMax - signalMin));
+				maxAmplitude = max(maxAmplitude, abs(signalMax - signalMin));
 			}
 
+			//DEFAULT_PRINT->print("DetermineSignalPitch() done sampling"); Ln();
+			//PrintStringInt("signalMin", signalMin); Ln();
+			//PrintStringInt("signalMax", signalMax); Ln();
+			//PrintStringInt("maxAmplitude", maxAmplitude); Ln();
 			//for (int i = 0; i < BUFFER_SIZE; ++i)
 			//{
 			//	DEFAULT_PRINT->print(static_cast<int>(g_recordingBuffer[i]));
@@ -884,146 +933,131 @@ public:
 			{
 				PrintStringInt("signalMin", signalMin); Ln();
 				PrintStringInt("signalMax", signalMax); Ln();
-				PrintStringInt("m_maxAmplitude", m_maxAmplitude); Ln();
+				PrintStringInt("maxAmplitude", maxAmplitude); Ln();
 			});
 
-			float result = 0.0f;
-
 			// If we haven't reached the amplitude threshold, don't try to determine pitch.
-			if (m_maxAmplitude < AMPLITUDE_THRESHOLD)
+			if (maxAmplitude < AMPLITUDE_THRESHOLD)
 			{
-				result = -1.0f;
+				//DEFAULT_PRINT->print("DetermineSignalPitch() no amplitude"); Ln();
+				return -1.0f;
 			}
 
-			// Alright, now try to figure what the ballpark note this is by calculating autocorrelation
-			Fixed bestOffset = 0;
-#define SUBDIVIDE 1
-#if SUBDIVIDE
-			Fixed incrementAtBestOffset = 0;
-#endif // #if SUBDIVIDE
-
-			if (result >= 0.0f)
+			bool doPrint = false;
+			Fixed bestOffset = ~0;
+			for (;;)
 			{
-				int numCorrelations = 0;
-				unsigned long sumToDate = 0;
+				// Alright, now try to figure what the ballpark note this is by calculating autocorrelation
+				static int const OFFSET_STEP = 28;
+
 				bool inThreshold = false;
-				unsigned long bestPrime = ~0;
-				Fixed offsetStep = OFFSET_STEP;
 
-				// If we're in MIDI mode, double the step; this will reduce precision, but increase speed (and thus reduce
-				// latency).
-				//if (m_mode == TunerMode::Midi)
-				//{
-				//	offsetStep <<= 1;
-				//}
+				const Fixed maxSamplesFixed = I2FIXED(MAX_SAMPLES);
+				unsigned long maxCorrelation = 0;
+				unsigned long correlationDipThreshold = 0;
+				unsigned long bestCorrelation = ~0;
+				const Fixed offsetToStartPreciseSampling = I2FIXED(MIN_SAMPLES - 2);
 
-				Fixed offsetIncrement = offsetStep;
-				Fixed maxSamplesFixed = I2FIXED(MAX_SAMPLES);
-				for (Fixed offset = I2FIXED(MIN_SAMPLES); offset < maxSamplesFixed; offset += offsetIncrement)
+				// We start a bit before the minimum offset to prime the thresholds
+				//for (Fixed offset = max(offsetAtMinFrequency - OFFSET_STEP * 4, 0); offset < maxSamplesFixed; offset += OFFSET_STEP)
+				for (Fixed offset = (offsetToStartPreciseSampling >> 1); offset < maxSamplesFixed; )
 				{
-					unsigned long curCorrelation = GetCorrelationFactorFixed(g_recordingBuffer, offset);
-					++numCorrelations;
-					sumToDate += curCorrelation;
+					unsigned long curCorrelation = GetCorrelationFactorFixed(offset, 96) << 8;
 
-					// Increment the increment right away, so we save the range appropriately for the refined search
-					////////////////////////////////////////////////////////////////////
-					//@TODO: PUT THIS ADDITION BACK IN
-					////////////////////////////////////////////////////////////////////
-					offsetIncrement += offsetStep;
-
-					unsigned long prime = GetCorrelationFactorPrime(curCorrelation, numCorrelations, sumToDate);
-					//DEFAULT_PRINT->print(offset);
-					//DEFAULT_PRINT->print(", ");
-					//DEFAULT_PRINT->print(curCorrelation);
-					//DEFAULT_PRINT->print(", ");
-					//DEFAULT_PRINT->print(numCorrelations);
-					//DEFAULT_PRINT->print(", ");
-					//DEFAULT_PRINT->print(sumToDate);
-					//DEFAULT_PRINT->print(", ");
-					//DEFAULT_PRINT->print(prime);
-					//Ln();
-
-					if (prime < bestPrime)
+					if (doPrint)
 					{
-						bestPrime = prime;
-						bestOffset = offset;
-#if SUBDIVIDE
-						incrementAtBestOffset = offsetIncrement;
-#endif // #if SUBDIVIDE
+						//PrintStringInt("ofs", offset); DEFAULT_PRINT->print(" ");
+						//PrintStringLong("gcf", curCorrelation); DEFAULT_PRINT->print(" "); Ln();
+						DEFAULT_PRINT->print(offset); DEFAULT_PRINT->print(", ");
+						DEFAULT_PRINT->print(curCorrelation); DEFAULT_PRINT->print(", ");
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 4) * 4); DEFAULT_PRINT->print(", ");
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 8) * 8); DEFAULT_PRINT->print(", ");
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 16) * 16); DEFAULT_PRINT->print(", ");
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 24) * 24); DEFAULT_PRINT->print(", ");
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 32) * 32); DEFAULT_PRINT->print(", ");
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 64) * 64); DEFAULT_PRINT->print(", ");
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 96) * 96); DEFAULT_PRINT->print(", ");
+						DEFAULT_PRINT->print(maxCorrelation); DEFAULT_PRINT->print(", ");
+						DEFAULT_PRINT->print(correlationDipThreshold);
+						Ln();
 					}
 
-					if (prime < PRIME_THRESHOLD)
+					if (curCorrelation > maxCorrelation)
 					{
+						maxCorrelation = curCorrelation;
+						correlationDipThreshold = (maxCorrelation * 13) / 100;
+						//PrintStringLong("maxCorrelation", maxCorrelation); DEFAULT_PRINT->print(" ");
+						//PrintStringLong("correlationDipThreshold", correlationDipThreshold); Ln();
+					}
+
+					if (offset < offsetToStartPreciseSampling)
+					{
+						offset += OFFSET_STEP * 4;
+						continue;
+					}
+
+					if (curCorrelation < correlationDipThreshold)
+					{
+						if (curCorrelation < bestCorrelation)
+						{
+							bestCorrelation = curCorrelation;
+							bestOffset = offset;
+							//DEFAULT_PRINT->print("best!"); Ln();
+						}
+
 						inThreshold = true;
+						//DEFAULT_PRINT->print("enter threshold"); Ln();
 					}
 					else if (inThreshold) // was in threshold, now exited, have best minimum in threshold
 					{
-						//found = true;
-						////////////////////////////////////////////////////////////////////
-						//@TODO: PUT THIS BREAK BACK IN
-						////////////////////////////////////////////////////////////////////
+						//DEFAULT_PRINT->print("exit threshold"); Ln();
 						break;
 					}
+
+					offset += OFFSET_STEP;
 				}
-			}
 
-			if (FIXED_INT(bestOffset) == MAX_SAMPLES)
-			{
-				result = -1.0f;
-			}
-
-#if SUBDIVIDE
-			// If we're not in tuner mode, try to refine the pitch estimate by interpolating samples, for subsample accuracy.
-			//if ((result >= 0.0f) && (m_mode == TunerMode::Tuner))
-			if (result >= 0.0f)
-			{
-				// Upsample the signal to get a better bearing on the real frequency
-				Fixed minSamples = bestOffset - incrementAtBestOffset;
-				Fixed maxSamples = bestOffset + incrementAtBestOffset;
-				unsigned long bestCorrelation = ~0;
-				bestOffset = 0;
-				for (Fixed offset = minSamples; offset <= maxSamples; ++offset) // step by one, which is the smallest possible fixed-point step
+				if (doPrint)
 				{
-					//++numCorrelations;
-					unsigned long curCorrelation = GetCorrelationFactorFixed(g_recordingBuffer, offset);
+					PrintStringInt("bestOffset", bestOffset); Ln();
+					PrintStringInt("maxSamplesFixed", maxSamplesFixed); Ln();
+				}
+
+				if (bestOffset == ~0)
+				{
+					//DEFAULT_PRINT->print("bestOffset was never set"); Ln();
+					return -1.0f;
+				}
+
+				// Upsample the signal to get a better bearing on the real frequency
+				//@TODO: upsample in stages, reducing the GCF step gradually
+#if 0
+				Fixed minOffset = bestOffset - OFFSET_STEP;
+				Fixed maxOffset = bestOffset + OFFSET_STEP;
+				bestCorrelation = ~0;
+				bestOffset = 0;
+				for (Fixed offset = minOffset; offset <= maxOffset; ++offset) // step by one, which is the smallest possible fixed-point step
+				{
+					unsigned long curCorrelation = GetCorrelationFactorFixed(offset, 2);
+					//DEFAULT_PRINT->print(offset); DEFAULT_PRINT->print(", ");
+					//DEFAULT_PRINT->print(curCorrelation);
+					//Ln();
+
 					if (curCorrelation < bestCorrelation)
 					{
 						bestCorrelation = curCorrelation;
 						bestOffset = offset;
-					}
-				}
 			}
-#endif // #if SUBDIVIDE
-			finalBestOffset = bestOffset;
-			//totalNumCorrelations = numCorrelations;
-
-			int const T1 = AMPLITUDE_THRESHOLD;
-			//int const T2 = 120;
-
-			if (m_maxAmplitude > T1)
-			{
-				if (result >= 0.0f)
+		}
+#endif
+				if (doPrint || GetFrequencyForOffsetFixed(bestOffset) > 700.0f)
 				{
-					// If we hit the end, assume no periodicity
-					result = GetFrequencyForOffsetFixed(bestOffset);
+					break;
 				}
-				//digitalWrite(kStatusPin, HIGH);
-			}
-			else
-			{
-				result = -1.0f;
-				//digitalWrite(kStatusPin, LOW);
+				doPrint = true;
 			}
 
-			//if (m_maxAmplitude > T2)
-			//{
-			//	digitalWrite(kStatusPin2, HIGH);
-			//}
-			//else
-			//{
-			//	digitalWrite(kStatusPin2, LOW);
-			//}
-
+			float result = GetFrequencyForOffsetFixed(bestOffset);
 			return result;
 		}
 
@@ -1059,17 +1093,6 @@ public:
 #endif // #if ENABLE_LCD
 	}
 
-	static int const AMPLITUDE_THRESHOLD = 30;
-	static int const CORRELATION_STEP = 2;
-	// For pure sine, 8 is better than 10 or 12, which causes octave errors at higher frequencies
-	// (>400 for 10, >350 for 12).
-	// For guitar, sweet spot is between 1/2 and 1/3
-	static int const PRIME_THRESHOLD = (FIXED_ONE * 5) / 12; //@TODO: get rid of this notion?
-	////////////////////////////////////////////////////////////////////
-	//@TODO: PUT THIS BACK TO 1
-	////////////////////////////////////////////////////////////////////
-	static int const OFFSET_STEP = 1;
-	
 	void Start()
 	{
 		DEBUG_PRINT_STATEMENTS(Serial.write("Starting tuner..."); Ln(););
@@ -1134,7 +1157,7 @@ public:
 		LoadTuning();
 		//TunePitch();
 
-		//m_lastMicros = 0;
+		m_lastMicros = 0;
 	}
 
 	void Stop()
@@ -1555,10 +1578,24 @@ public:
 #endif // #if ENABLE_LCD
 
 			DEBUG_PRINT_STATEMENTS(Serial.write("DetermineSignalPitch"); Ln(););
-			Fixed bestOffset;
-			//int numCorrelations = 0;
-			//float instantFrequency = m_channels[0].DetermineSignalPitch(bestOffset, numCorrelations);
-			float instantFrequency = m_channels[0].DetermineSignalPitch(bestOffset);
+			//Fixed bestOffset;
+			//int numCoarseCorrelations = 0;
+			//int numFineCorrelations = 0;
+			//s_correlationStep = 2;
+			//float instantFrequency = m_channels[0].DetermineSignalPitch(bestOffset, numCoarseCorrelations, numFineCorrelations);
+			//Fixed bestOffset2;
+			//float instantFrequency2;
+			//s_correlationStep = 32;
+			//instantFrequency2 = m_channels[0].DetermineSignalPitch(bestOffset2, numCoarseCorrelations, numFineCorrelations);
+			//Fixed bestOffset3;
+			//float instantFrequency3;
+			//s_correlationStep = 64;
+			//instantFrequency3 = m_channels[0].DetermineSignalPitch(bestOffset3, numCoarseCorrelations, numFineCorrelations);
+			//Fixed bestOffset4;
+			//float instantFrequency4;
+			//s_correlationStep = 128;
+			//instantFrequency4 = m_channels[0].DetermineSignalPitch(bestOffset4, numCoarseCorrelations, numFineCorrelations);
+			float instantFrequency = m_channels[0].DetermineSignalPitch();
 #if FAKE_FREQUENCY
 			static float t = 0.0f;
 			t += 0.001f;
@@ -1628,44 +1665,50 @@ public:
 
 #if PRINT_FREQUENCY_TO_SERIAL
 #if PRINT_FREQUENCY_TO_SERIAL_VT100
-			//unsigned long nowMicros = micros();
-			//unsigned long deltaMicros = nowMicros - m_lastMicros;
+			unsigned long nowMicros = micros();
+			unsigned long deltaMicros = nowMicros - m_lastMicros;
 
-			//float sps = 1000000.0f / deltaMicros;
+			float sps = 1000000.0f / deltaMicros;
 
-			//m_lastMicros = nowMicros;
+			m_lastMicros = nowMicros;
 
 			MoveCursor(0, 0);
 			Serial.print("\x1B[0m");
 #endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
-			Serial.print("-----"); Ln();
-			//PrintStringFloat("SPS ", sps); Ln();
-			PrintStringInt("ofs (int)", bestOffset); Ln();
-			PrintStringFloat("ofs (float)", FIXED2F(bestOffset)); Ln();
-			//PrintStringInt("numCorrelations", numCorrelations); Ln();
+			//Serial.print("-----"); Ln();
+			PrintStringFloat("SPS ", sps); Ln();
+			//PrintStringInt("ofs (int)", bestOffset); Ln();
+			//PrintStringFloat("ofs (float)", FIXED2F(bestOffset)); Ln();
+			//PrintStringInt("numCoarseCorrelations", numCoarseCorrelations); DEFAULT_PRINT->print("   "); Ln();
+			//PrintStringInt("numFineCorrelations", numFineCorrelations); DEFAULT_PRINT->print("   "); Ln();
 			PrintStringFloat("Instant freq", instantFrequency); Ln();
-			PrintStringFloat("Filtered freq", filteredFrequency); Ln();
-			PrintStringInt("MIDI note", m_tunerNote); Ln();
-			PrintStringFloat("MIDI frequency", centerFrequency); Ln();
-			PrintStringFloat("Bottom frequency for note", minFrequency); Ln();
-			PrintStringFloat("Top frequency for note", maxFrequency); Ln();
-			PrintStringFloat("Percent note (50% is perfect)", percent); Ln();
-#if PRINT_FREQUENCY_TO_SERIAL_VT100
-			percent = Clamp(percent, 0.0f, 0.9999f);
-			const int numCharacters = 31;
-			const int centerCharacterIndex = numCharacters / 2;
-			int characterIndex = (percent * numCharacters);
-			const char* tunerCharacters[2][3] = {{"»", /*"·"*/"o", "«"}, {"|", "O", "|"}};
-			for (int i = 0; i < numCharacters; ++i)
-			{
-				int leftRightSelector = sgn(i - centerCharacterIndex) + 1;
-				int onOffSelector = (i == characterIndex) ? 1 : 0;
-				Serial.print(tunerCharacters[onOffSelector][leftRightSelector]);
-			}
-			Serial.print(" ");
-			Ln();
-#endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
-			PrintStringInt("ofs3", bestOffset3); Ln();
+			//PrintStringInt("ofs2", bestOffset2); Ln();
+			//PrintStringFloat("Instant freq 2", instantFrequency2); Ln();
+			//PrintStringInt("ofs3", bestOffset3); Ln();
+			//PrintStringFloat("Instant freq 3", instantFrequency3); Ln();
+			//PrintStringInt("ofs4", bestOffset4); Ln();
+			//PrintStringFloat("Instant freq 4", instantFrequency4); Ln();
+			//PrintStringFloat("Filtered freq", filteredFrequency); Ln();
+			//PrintStringInt("MIDI note", m_tunerNote); Ln();
+			//PrintStringFloat("MIDI frequency", centerFrequency); Ln();
+			//PrintStringFloat("Bottom frequency for note", minFrequency); Ln();
+			//PrintStringFloat("Top frequency for note", maxFrequency); Ln();
+			//PrintStringFloat("Percent note (50% is perfect)", percent); Ln();
+//#if PRINT_FREQUENCY_TO_SERIAL_VT100
+//			percent = Clamp(percent, 0.0f, 0.9999f);
+//			const int numCharacters = 31;
+//			const int centerCharacterIndex = numCharacters / 2;
+//			int characterIndex = (percent * numCharacters);
+//			const char* tunerCharacters[2][3] = {{"»", /*"·"*/"o", "«"}, {"|", "O", "|"}};
+//			for (int i = 0; i < numCharacters; ++i)
+//			{
+//				int leftRightSelector = sgn(i - centerCharacterIndex) + 1;
+//				int onOffSelector = (i == characterIndex) ? 1 : 0;
+//				Serial.print(tunerCharacters[onOffSelector][leftRightSelector]);
+//			}
+//			Serial.print(" ");
+//			Ln();
+//#endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
 #endif //#if PRINT_FREQUENCY_TO_SERIAL
 		}
 
@@ -1689,8 +1732,11 @@ private:
 	TunerMode::Type m_mode;
 
 	Channel m_channels[NUM_CHANNELS];
-	//unsigned long m_lastMicros;
+	unsigned long m_lastMicros;
 };
+
+//int Tuner::s_correlationStep = 2;
+
 
 ///////////////////////////////////////////////////////////////////////////////
 // Main stuff
