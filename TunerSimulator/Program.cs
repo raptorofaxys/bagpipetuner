@@ -31,12 +31,12 @@ namespace TunerSimulator
         const int MAX_SAMPLES = SAMPLES_PER_SECOND / MIN_FREQUENCY;
         const int WINDOW_SIZE = MAX_SAMPLES;
 
-        static float GetCorrelationFactor(float[] sample, float offset)
+        static float GetCorrelationFactor(float[] sample, float offset, int step)
         {
             var result = 0.0f;
             var integer = (int)offset;
             var frac = offset - integer;
-            var step = 1;
+            //var step = 1;
 
             for (int i = 0; i < WINDOW_SIZE; i += step)
             {
@@ -45,7 +45,8 @@ namespace TunerSimulator
                 result += Math.Abs(b - a);
             }
 
-            return result;
+            return result * step;
+            //return result;
         }
 
         static float GetCorrelationFactorPrime(float correlation, float numCorrelationsToDate, float sumToDate)
@@ -60,20 +61,27 @@ namespace TunerSimulator
 
         static void Main(string[] args)
         {
-            //var sample = LoadSample("Chanter.raw");
-            var sample = LoadSample("Tenor drone.raw");
+            var sample = LoadSample("Chanter.raw");
+            //var sample = LoadSample("Tenor drone.raw");
             var log = new StringBuilder();
 
             var numCorrelations = 0;
             var sum = 0.0f;
             var step = 1.0f / 4;
+            var gcfStep = 1;
+            var baseScale = 24;
             for (var offset = step; offset < MAX_SAMPLES; offset += step)
             {
                 ++numCorrelations;
-                var correlation = GetCorrelationFactor(sample, offset);
+                var correlation = GetCorrelationFactor(sample, offset, gcfStep);
                 sum += correlation;
                 var prime = GetCorrelationFactorPrime(correlation, numCorrelations, sum);
-                log.AppendFormat("{0}, {1}, {2}\n", offset, correlation, prime);
+                log.AppendFormat("{0}, {1}, {2}, {3}, {4}, {5}, {6}\n", offset, correlation, //prime,
+                    GetCorrelationFactor(sample, offset, gcfStep * 1 * baseScale),
+                    GetCorrelationFactor(sample, offset, gcfStep * 2 * baseScale),
+                    GetCorrelationFactor(sample, offset, gcfStep * 3 * baseScale),
+                    GetCorrelationFactor(sample, offset, gcfStep * 4 * baseScale),
+                    GetCorrelationFactor(sample, offset, gcfStep * 5 * baseScale));
             }
 
             File.WriteAllText("output.txt", log.ToString());
