@@ -1665,6 +1665,7 @@ public:
 			Serial.print(" ");
 			Ln();
 #endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
+			PrintStringInt("ofs3", bestOffset3); Ln();
 #endif //#if PRINT_FREQUENCY_TO_SERIAL
 		}
 
