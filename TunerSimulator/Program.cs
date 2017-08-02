@@ -17,6 +17,11 @@ namespace TunerSimulator
             var result = new float[numSamples];
             Buffer.BlockCopy(bytes, 0, result, 0, bytes.Length);
 
+            for (var i = 0; i < result.Length; ++i)
+            {
+                result[i] = (int)(result[i] * 128) / 128.0f;
+            }
+
             return result;
         }
 
