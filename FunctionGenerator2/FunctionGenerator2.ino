@@ -148,6 +148,14 @@ void loop()
 			unsigned char high = static_cast<unsigned char>(timerCompare >> 8);
 			unsigned char low = static_cast<unsigned char>(timerCompare & 0xFF);
 
+			//unsigned char sreg = SREG;
+			//cli();
+			//if (TCNT1 > timerCompare)
+			//{
+			//	TCNT1 = 0;
+			//}
+			//SREG = sreg;
+
 			if (abs(inValue - lastIn) > TUNING_THRESHOLD)
 			{
 				//PrintStringInt("inValue", inValue); Ln();
@@ -157,11 +165,18 @@ void loop()
 				//PrintStringInt("high", high); Ln();
 				//PrintStringInt("low", low); Ln();
 
-				GTCCR = 0b10000011;
-				TCNT1 = 0;
-				OCR1AH = high;
-				OCR1AL = low;
-				GTCCR = 0;
+				//GTCCR = 0b10000011;
+				unsigned char sreg = SREG;
+				cli();
+				if ((timerCompare < OCR1A) && (TCNT1 >= timerCompare))
+				{
+					TCNT1 = 0;
+				}
+				OCR1A = timerCompare;
+				SREG = sreg;
+				//OCR1AH = high;
+				//OCR1AL = low;
+				//GTCCR = 0;
 
 				lastIn = inValue;
 			}
