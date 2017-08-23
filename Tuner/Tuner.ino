@@ -964,6 +964,7 @@ public:
 
 				// We start a bit before the minimum offset to prime the thresholds
 				//for (Fixed offset = max(offsetAtMinFrequency - OFFSET_STEP * 4, 0); offset < maxSamplesFixed; offset += OFFSET_STEP)
+				// make a function out of the subdivision loop; scan from offset to offset with a given step and adaptive parameters, with a given skip for GCF
 				for (Fixed offset = (offsetToStartPreciseSampling >> 1); offset < maxSamplesFixed; )
 				{
 					unsigned long curCorrelation = GetCorrelationFactorFixed(offset, 96) << 8;

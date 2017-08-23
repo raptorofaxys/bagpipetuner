@@ -5,6 +5,8 @@ using System.Linq;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
+using NAudio.Wave;
+using System.Threading;
 
 namespace TunerSimulator
 {
@@ -64,8 +66,52 @@ namespace TunerSimulator
             return correlation * numCorrelationsToDate / sumToDate;
         }
 
+        public class SineWaveProvider32 : WaveProvider32
+        {
+            int sample;
+
+            public SineWaveProvider32()
+            {
+                Frequency = 1000;
+                Amplitude = 0.25f; // let's not hurt our ears            
+            }
+
+            public float Frequency { get; set; }
+            public float Amplitude { get; set; }
+
+            public override int Read(float[] buffer, int offset, int sampleCount)
+            {
+                int sampleRate = WaveFormat.SampleRate;
+                for (int n = 0; n < sampleCount; n++)
+                {
+                    buffer[n + offset] = (float)(Amplitude * Math.Sin((2 * Math.PI * sample * Frequency) / sampleRate));
+                    sample++;
+                    if (sample >= sampleRate) sample = 0;
+                }
+                return sampleCount;
+            }
+        }
+
+        static void TestAudio()
+        {
+            var sineWaveProvider = new SineWaveProvider32();
+            sineWaveProvider.SetWaveFormat(16000, 1); // 16kHz mono
+            sineWaveProvider.Frequency = 1000;
+            sineWaveProvider.Amplitude = 0.25f;
+            var waveOut = new WaveOut();
+            waveOut.Init(sineWaveProvider);
+            waveOut.Play();
+
+            Thread.Sleep(1000);
+            waveOut.Stop();
+            waveOut.Dispose();
+            waveOut = null;
+        }
+
         static void Main(string[] args)
         {
+            //TestAudio();
+
             var sample = LoadSample("Chanter.raw");
             //var sample = LoadSample("Tenor drone.raw");
             var log = new StringBuilder();
