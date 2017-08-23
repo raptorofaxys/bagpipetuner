@@ -944,7 +944,7 @@ public:
 			}
 
 			bool doPrint = false;
-			Fixed bestOffset = ~0;
+			Fixed minBestOffset = ~0;
 			Fixed maxBestOffset = ~0;
 			for (;;)
 			{
@@ -1005,7 +1005,7 @@ public:
 						if (curCorrelation < bestCorrelation)
 						{
 							bestCorrelation = curCorrelation;
-							bestOffset = offset;
+							minBestOffset = offset;
 							maxBestOffset = offset;
 							//DEFAULT_PRINT->print("best!"); Ln();
 						}
@@ -1038,12 +1038,12 @@ public:
 
 				if (doPrint)
 				{
-					PrintStringInt("bestOffset", bestOffset); Ln();
+					PrintStringInt("minBestOffset", minBestOffset); Ln();
 					PrintStringInt("maxBestOffset", maxBestOffset); Ln();
 					PrintStringInt("maxSamplesFixed", maxSamplesFixed); Ln();
 				}
 
-				if (bestOffset == ~0)
+				if (minBestOffset == ~0)
 				{
 					//DEFAULT_PRINT->print("bestOffset was never set"); Ln();
 					return -1.0f;
@@ -1077,7 +1077,7 @@ public:
 				doPrint = true;
 			}
 
-			float result = GetFrequencyForOffsetFixed((bestOffset + maxBestOffset) >> 1);
+			float result = GetFrequencyForOffsetFixed((minBestOffset + maxBestOffset) >> 1);
 			return result;
 		}
 
