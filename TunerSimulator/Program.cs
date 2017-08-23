@@ -7,6 +7,7 @@ using System.Text;
 using System.Threading.Tasks;
 using NAudio.Wave;
 using System.Threading;
+using NAudio.Wave.SampleProviders;
 
 namespace TunerSimulator
 {
@@ -66,43 +67,61 @@ namespace TunerSimulator
             return correlation * numCorrelationsToDate / sumToDate;
         }
 
-        public class SineWaveProvider32 : WaveProvider32
+        //public class SineWaveProvider32 : WaveProvider32
+        //{
+        //    int sample;
+
+        //    public SineWaveProvider32()
+        //    {
+        //        Frequency = 1000;
+        //        Amplitude = 0.25f; // let's not hurt our ears            
+        //    }
+
+        //    public float Frequency { get; set; }
+        //    public float Amplitude { get; set; }
+
+        //    public override int Read(float[] buffer, int offset, int sampleCount)
+        //    {
+        //        int sampleRate = WaveFormat.SampleRate;
+        //        for (int n = 0; n < sampleCount; n++)
+        //        {
+        //            buffer[n + offset] = (float)(Amplitude * Math.Sin((2 * Math.PI * sample * Frequency) / sampleRate));
+        //            sample++;
+        //            if (sample >= sampleRate) sample = 0;
+        //        }
+        //        return sampleCount;
+        //    }
+        //}
+
+        class BufferResamplerProvider : WaveProvider32
         {
-            int sample;
+            public float[] Samples;
 
-            public SineWaveProvider32()
-            {
-                Frequency = 1000;
-                Amplitude = 0.25f; // let's not hurt our ears            
-            }
-
-            public float Frequency { get; set; }
-            public float Amplitude { get; set; }
+            private int m_sampleCursor;
 
             public override int Read(float[] buffer, int offset, int sampleCount)
             {
-                int sampleRate = WaveFormat.SampleRate;
-                for (int n = 0; n < sampleCount; n++)
+                for (var i = 0; i < sampleCount; ++i)
                 {
-                    buffer[n + offset] = (float)(Amplitude * Math.Sin((2 * Math.PI * sample * Frequency) / sampleRate));
-                    sample++;
-                    if (sample >= sampleRate) sample = 0;
+                    buffer[offset + i] = Samples[(m_sampleCursor + i) % Samples.Length];
                 }
+                m_sampleCursor += sampleCount;
+
                 return sampleCount;
             }
         }
 
-        static void TestAudio()
+        static void TestAudio(float[] samples)
         {
-            var sineWaveProvider = new SineWaveProvider32();
-            sineWaveProvider.SetWaveFormat(16000, 1); // 16kHz mono
-            sineWaveProvider.Frequency = 1000;
-            sineWaveProvider.Amplitude = 0.25f;
+            // Could use SignalGenerator for sine/triangle/saw/etc.
+            var provider = new BufferResamplerProvider();
+            provider.Samples = samples;
+            provider.SetWaveFormat(44100, 1);
             var waveOut = new WaveOut();
-            waveOut.Init(sineWaveProvider);
+            waveOut.Init(provider);
             waveOut.Play();
 
-            Thread.Sleep(1000);
+            Thread.Sleep(2000);
             waveOut.Stop();
             waveOut.Dispose();
             waveOut = null;
@@ -110,10 +129,10 @@ namespace TunerSimulator
 
         static void Main(string[] args)
         {
-            //TestAudio();
+            //var sample = LoadSample("Chanter.raw");
+            var sample = LoadSample("Tenor drone.raw");
+            TestAudio(sample);
 
-            var sample = LoadSample("Chanter.raw");
-            //var sample = LoadSample("Tenor drone.raw");
             var log = new StringBuilder();
 
             var numCorrelations = 0;
