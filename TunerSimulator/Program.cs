@@ -96,32 +96,46 @@ namespace TunerSimulator
         class BufferResamplerProvider : WaveProvider32
         {
             public float[] Samples;
+            public float SignalFrequency;
+            public float DesiredFrequency;
 
-            private int m_sampleCursor;
+            private float m_sampleCursor;
+
+            float GetSample(float index)
+            {
+                var firstSampleIndex = (int)index % Samples.Length;
+                var nextSampleIndex = (firstSampleIndex + 1) % Samples.Length;
+                var frac = index - (int)index;
+
+                return (Samples[firstSampleIndex] * (1.0f - frac)) + (Samples[nextSampleIndex] * frac);
+            }
 
             public override int Read(float[] buffer, int offset, int sampleCount)
             {
-                for (var i = 0; i < sampleCount; ++i)
+                float samplingRatio = DesiredFrequency / SignalFrequency;
+
+                for (var i = 0; i < sampleCount; ++i, m_sampleCursor += samplingRatio)
                 {
-                    buffer[offset + i] = Samples[(m_sampleCursor + i) % Samples.Length];
+                    buffer[offset + i] = GetSample(m_sampleCursor);
                 }
-                m_sampleCursor += sampleCount;
 
                 return sampleCount;
             }
         }
 
-        static void TestAudio(float[] samples)
+        static void TestAudio(float[] samples, float signalFrequency)
         {
             // Could use SignalGenerator for sine/triangle/saw/etc.
             var provider = new BufferResamplerProvider();
             provider.Samples = samples;
+            provider.SignalFrequency = signalFrequency;
+            provider.DesiredFrequency = 440;
             provider.SetWaveFormat(44100, 1);
             var waveOut = new WaveOut();
             waveOut.Init(provider);
             waveOut.Play();
 
-            Thread.Sleep(2000);
+            Thread.Sleep(5000);
             waveOut.Stop();
             waveOut.Dispose();
             waveOut = null;
@@ -129,9 +143,9 @@ namespace TunerSimulator
 
         static void Main(string[] args)
         {
-            //var sample = LoadSample("Chanter.raw");
-            var sample = LoadSample("Tenor drone.raw");
-            TestAudio(sample);
+            //var sample = LoadSample("Chanter.raw"); // 594 Hz?
+            var sample = LoadSample("Tenor drone.raw"); // 239 Hz
+            TestAudio(sample, 239);
 
             var log = new StringBuilder();
 
