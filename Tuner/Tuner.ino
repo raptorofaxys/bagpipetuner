@@ -90,7 +90,7 @@ extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
 #define ENABLE_LCD 0
 #define ENABLE_BUTTON_INPUTS 0
 #define PRINT_FREQUENCY_TO_SERIAL 1
-#define PRINT_FREQUENCY_TO_SERIAL_VT100 1
+#define PRINT_FREQUENCY_TO_SERIAL_VT100 0
 #define FAKE_FREQUENCY 0
 #define ENABLE_DEBUG_PRINT_STATEMENTS 0
 //#define Serial _SERIAL_FAIL_
@@ -1684,8 +1684,6 @@ public:
 			}
 #endif // #if ENABLE_LCD
 
-#if PRINT_FREQUENCY_TO_SERIAL
-#if PRINT_FREQUENCY_TO_SERIAL_VT100
 			unsigned long nowMicros = micros();
 			unsigned long deltaMicros = nowMicros - m_lastMicros;
 
@@ -1693,16 +1691,19 @@ public:
 
 			m_lastMicros = nowMicros;
 
+#if PRINT_FREQUENCY_TO_SERIAL
+#if PRINT_FREQUENCY_TO_SERIAL_VT100
 			MoveCursor(0, 0);
 			Serial.print("\x1B[0m");
 #endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
 			//Serial.print("-----"); Ln();
-			PrintStringFloat("SPS ", sps); Ln();
+			//PrintStringFloat("SPS ", sps); Ln();
 			//PrintStringInt("ofs (int)", bestOffset); Ln();
 			//PrintStringFloat("ofs (float)", FIXED2F(bestOffset)); Ln();
 			//PrintStringInt("numCoarseCorrelations", numCoarseCorrelations); DEFAULT_PRINT->print("   "); Ln();
 			//PrintStringInt("numFineCorrelations", numFineCorrelations); DEFAULT_PRINT->print("   "); Ln();
-			PrintStringFloat("Instant freq", instantFrequency); Ln();
+			//PrintStringFloat("Instant freq", instantFrequency); Ln();
+			PrintFloat(instantFrequency); Ln();
 			//PrintStringInt("ofs2", bestOffset2); Ln();
 			//PrintStringFloat("Instant freq 2", instantFrequency2); Ln();
 			//PrintStringInt("ofs3", bestOffset3); Ln();
