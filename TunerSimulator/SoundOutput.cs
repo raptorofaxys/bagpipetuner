@@ -15,9 +15,11 @@ namespace TunerSimulator
     {
         public readonly float[] Samples;
         public readonly float Frequency;
+        public readonly string Filename;
 
         public Sample(string filename, float frequency)
         {
+            Filename = filename;
             Frequency = frequency;
             Samples = LoadSample(filename);
         }
@@ -73,7 +75,7 @@ namespace TunerSimulator
 
         public override int Read(float[] buffer, int offset, int sampleCount)
         {
-            lock (m_sample)
+            lock (m_lock)
             {
                 if (m_sample != null)
                 {
