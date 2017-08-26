@@ -13,19 +13,31 @@ namespace TunerSimulator
 {
     class Program
     {
-        static float[] LoadSample(string filepath)
+        class Sample
         {
-            var bytes = File.ReadAllBytes(filepath);
-            var numSamples = bytes.Length / sizeof(float);
-            var result = new float[numSamples];
-            Buffer.BlockCopy(bytes, 0, result, 0, bytes.Length);
+            public float[] Samples;
+            public float Frequency;
 
-            for (var i = 0; i < result.Length; ++i)
+            public Sample(string filename, float frequency)
             {
-                result[i] = (int)(result[i] * 128) / 128.0f;
+                Frequency = frequency;
+                Samples = LoadSample(filename);
             }
 
-            return result;
+            static float[] LoadSample(string filepath)
+            {
+                var bytes = File.ReadAllBytes(filepath);
+                var numSamples = bytes.Length / sizeof(float);
+                var result = new float[numSamples];
+                Buffer.BlockCopy(bytes, 0, result, 0, bytes.Length);
+
+                for (var i = 0; i < result.Length; ++i)
+                {
+                    result[i] = (int)(result[i] * 128) / 128.0f;
+                }
+
+                return result;
+            }
         }
 
         static float Lerp(float a, float b, float t)
@@ -67,32 +79,6 @@ namespace TunerSimulator
             return correlation * numCorrelationsToDate / sumToDate;
         }
 
-        //public class SineWaveProvider32 : WaveProvider32
-        //{
-        //    int sample;
-
-        //    public SineWaveProvider32()
-        //    {
-        //        Frequency = 1000;
-        //        Amplitude = 0.25f; // let's not hurt our ears            
-        //    }
-
-        //    public float Frequency { get; set; }
-        //    public float Amplitude { get; set; }
-
-        //    public override int Read(float[] buffer, int offset, int sampleCount)
-        //    {
-        //        int sampleRate = WaveFormat.SampleRate;
-        //        for (int n = 0; n < sampleCount; n++)
-        //        {
-        //            buffer[n + offset] = (float)(Amplitude * Math.Sin((2 * Math.PI * sample * Frequency) / sampleRate));
-        //            sample++;
-        //            if (sample >= sampleRate) sample = 0;
-        //        }
-        //        return sampleCount;
-        //    }
-        //}
-
         class BufferResamplerProvider : WaveProvider32
         {
             public float[] Samples;
@@ -123,19 +109,32 @@ namespace TunerSimulator
             }
         }
 
-        static void TestAudio(float[] samples, float signalFrequency)
+        static void TestAudio(Sample sample)
         {
             // Could use SignalGenerator for sine/triangle/saw/etc.
             var provider = new BufferResamplerProvider();
-            provider.Samples = samples;
-            provider.SignalFrequency = signalFrequency;
+            provider.Samples = sample.Samples;
+            provider.SignalFrequency = sample.Frequency;
             provider.DesiredFrequency = 440;
             provider.SetWaveFormat(44100, 1);
+
+            for (var i = 0; i < WaveOut.DeviceCount; ++i)
+            {
+                var caps = WaveOut.GetCapabilities(i);
+                Console.WriteLine("{0}: {1}", i, caps.ProductName);
+            }
+
             var waveOut = new WaveOut();
+            waveOut.DeviceNumber = 8;
             waveOut.Init(provider);
+            Console.WriteLine(waveOut);
             waveOut.Play();
 
-            Thread.Sleep(5000);
+            for (int i = 0; i < 100; ++i)
+            {
+                Thread.Sleep(10000);
+            }
+
             waveOut.Stop();
             waveOut.Dispose();
             waveOut = null;
@@ -143,9 +142,11 @@ namespace TunerSimulator
 
         static void Main(string[] args)
         {
-            //var sample = LoadSample("Chanter.raw"); // 594 Hz?
-            var sample = LoadSample("Tenor drone.raw"); // 239 Hz
-            TestAudio(sample, 239);
+            var chanter = new Sample("chanter.raw", 594);
+            var tenor = new Sample("tenor drone.raw", 239);
+            TestAudio(tenor);
+
+            var samples = tenor.Samples;
 
             var log = new StringBuilder();
 
@@ -157,15 +158,15 @@ namespace TunerSimulator
             for (var offset = step; offset < MAX_SAMPLES; offset += step)
             {
                 ++numCorrelations;
-                var correlation = GetCorrelationFactor(sample, offset, gcfStep);
+                var correlation = GetCorrelationFactor(samples, offset, gcfStep);
                 sum += correlation;
                 var prime = GetCorrelationFactorPrime(correlation, numCorrelations, sum);
                 log.AppendFormat("{0}, {1}, {2}, {3}, {4}, {5}, {6}\n", offset, correlation, //prime,
-                    GetCorrelationFactor(sample, offset, gcfStep * 1 * baseScale),
-                    GetCorrelationFactor(sample, offset, gcfStep * 2 * baseScale),
-                    GetCorrelationFactor(sample, offset, gcfStep * 3 * baseScale),
-                    GetCorrelationFactor(sample, offset, gcfStep * 4 * baseScale),
-                    GetCorrelationFactor(sample, offset, gcfStep * 5 * baseScale));
+                    GetCorrelationFactor(samples, offset, gcfStep * 1 * baseScale),
+                    GetCorrelationFactor(samples, offset, gcfStep * 2 * baseScale),
+                    GetCorrelationFactor(samples, offset, gcfStep * 3 * baseScale),
+                    GetCorrelationFactor(samples, offset, gcfStep * 4 * baseScale),
+                    GetCorrelationFactor(samples, offset, gcfStep * 5 * baseScale));
             }
 
             File.WriteAllText("output.txt", log.ToString());
