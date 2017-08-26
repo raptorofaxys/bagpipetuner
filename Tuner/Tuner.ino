@@ -967,7 +967,7 @@ public:
 				// make a function out of the subdivision loop; scan from offset to offset with a given step and adaptive parameters, with a given skip for GCF
 				for (Fixed offset = (offsetToStartPreciseSampling >> 1); offset < maxSamplesFixed; )
 				{
-					unsigned long curCorrelation = GetCorrelationFactorFixed(offset, 96) << 8;
+					unsigned long curCorrelation = GetCorrelationFactorFixed(offset, 1) << 8; // was using 96, which worked for the simple function generator but didn't work quite as well for the bagpipe signal
 
 					if (doPrint)
 					{
@@ -1078,7 +1078,7 @@ public:
 				doPrint = true;
 			}
 
-			float result = GetFrequencyForOffsetFixed((minBestOffset + maxBestOffset) >> 1);
+			float result = GetFrequencyForOffsetFixed((static_cast<long>(minBestOffset) + static_cast<long>(maxBestOffset)) >> 1);
 			return result;
 		}
 
