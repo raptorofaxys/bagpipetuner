@@ -45,15 +45,35 @@ namespace TunerSimulator
             }
         }
 
-        void TestAudioAsync()
+        void FullTunerTest()
         {
-            var chanter = new Sample("chanter.raw", 594);
-            var tenor = new Sample("tenor drone.raw", 239);
+            //var chanter = new Sample("chanter 594.raw", 594);
+            //var tenor = new Sample("tenor drone 239.raw", 239);
 
-            var samples = new Sample[] { chanter, tenor };
+            var samples = new Sample[]
+            {
+                new Sample("Base Drone 119.raw", 119),
+                new Sample("Tenor drone 239.raw", 239),
+                new Sample("Chanter LowG 420.raw", 420),
+                new Sample("Chanter LowA 477.raw", 477),
+                new Sample("Chanter B 536.raw", 536),
+                new Sample("Chanter C 594.raw", 594),
+                new Sample("Chanter D 627.raw", 627),
+                new Sample("Chanter E 716.raw", 716),
+                new Sample("Chanter F 805.raw", 805),
+                new Sample("Chanter HighG 815.raw", 815),
+                new Sample("Chanter HighA 943.raw", 943),
+            };
 
             var so = new SoundOutput();
             so.Start();
+
+            //foreach (var s in samples)
+            //{
+            //    so.Sample = s;
+            //    so.DesiredFrequency = s.Frequency;
+            //    Thread.Sleep(6000);
+            //}
 
             var rand = new Random();
 
@@ -64,9 +84,10 @@ namespace TunerSimulator
             //    so.DesiredFrequency = 60 + (rand.Next() % 1000);
             //}
 
-            var minFrequency = 60.0f;
-            var maxFrequency = 1100.0f;
-            var numSteps = 24.0;
+            var minFrequency = 80.0f;
+            var maxFrequency = 1050.0f;
+            var numSteps = 10.0;
+            var numTestsPerStep = 10;
             var mulStep = (float)Math.Pow(maxFrequency / minFrequency, 1.0f / (numSteps - 1));
 
             var results = new Dictionary<string, List<TestResult>>();
@@ -77,7 +98,7 @@ namespace TunerSimulator
                 Console.WriteLine("Testing {0}", s.Filename);
                 for (var frequency = minFrequency; frequency <= maxFrequency; frequency *= mulStep)
                 {
-                    var result = TestPoint(so, tenor, frequency);
+                    var result = TestPoint(so, s, frequency, numTestsPerStep);
                     results[s.Filename].Add(result);
                     Console.WriteLine("{0}: {1:0.00}% ({2})", frequency, result.PassRatio * 100.0f, string.Join(", ", result.Readings));
                 }
@@ -119,30 +140,49 @@ namespace TunerSimulator
             }
         }
 
-        TestResult TestPoint(SoundOutput so, Sample sample, float frequency)
+        void WaitForRejectedReadings(int numReadings)
         {
+            var rejectedReadings = 0;
+            for (; rejectedReadings < numReadings;)
+            {
+                if (DequeueFrequencyReading() < 0)
+                {
+                    ++rejectedReadings;
+                }
+            }
+        }
+
+        TestResult TestPoint(SoundOutput so, Sample sample, float frequency, int numReadings)
+        {
+            // Flush out the sound pipeline before starting the new test
+            so.Sample = null;
+
+            WaitForRejectedReadings(2);
+
             so.Sample = sample;
             so.DesiredFrequency = frequency;
 
             var result = new TestResult();
             result.Frequency = frequency;
-            
-            // Ignore the first few readings
-            for (var i = 0; i < 2; ++i)
+
+            // Wait until our first non-rejected reading
+            for (;;)
             {
-                DequeueFrequencyReading();
+                if (DequeueFrequencyReading() >= 0.0f)
+                {
+                    break;
+                }
             }
 
             var maxVariation = 0.1f;
             var minFrequency = frequency * (1.0f / (1 + maxVariation));
             var maxFrequency = frequency * (1 + maxVariation);
-            for (; result.NumReadings < 24; )
+            for (; result.NumReadings < numReadings; )
             {
                 var f = DequeueFrequencyReading();
                 result.Readings.Add(f);
 
-                //@HACK: change this to a >= 0.0f once the bug where the tuner outputs large negative numbers is figured out
-                if (f != -1.0f)
+                if (f >= 0.0f)
                 {
                     ++result.NumReadings;
                     var valid = (f >= minFrequency) && (f <= maxFrequency);
@@ -169,7 +209,7 @@ namespace TunerSimulator
 
         private void MainForm_Load(object sender, EventArgs e)
         {
-            m_audioTask = Task.Run(() => TestAudioAsync());
+            m_audioTask = Task.Run(() => FullTunerTest());
             //m_serialTask = Task.Run(() => DumpSerial());
             m_serialTask = Task.Run(() => ReadTunerFrequencyFromSerial());
         }
