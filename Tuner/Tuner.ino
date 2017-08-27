@@ -722,13 +722,6 @@ static int const FIXED_MASK_HI = ~((1 << FIXED_SHIFT_HI) - 1);
 #define		FIXED2F(x) ((x) / float(1 << FIXED_SHIFT))
 static int const PRIME_SHIFT = 8;
 
-// Linearly interpolates between two 8-bit signed values.
-char InterpolateChar(char a, char b, char tFrac)
-{
-	int d = b - a;
-	return a + ((d * tFrac) >> FIXED_SHIFT);
-}
-
 namespace TunerMode
 {
 	enum Type
@@ -744,7 +737,7 @@ static int const ADC_CLOCKS_PER_ADC_CONVERSION = 13;
 static unsigned long const CPU_CYCLES_PER_SAMPLE = ADC_CLOCKS_PER_ADC_CONVERSION * PRESCALER_DIVIDE;
 static unsigned long const SAMPLES_PER_SECOND = F_CPU / CPU_CYCLES_PER_SAMPLE;
 
-static int const MIN_FREQUENCY = 60;
+static int const MIN_FREQUENCY = 75;
 static int const MAX_FREQUENCY = 1100;
 static int const MIN_SAMPLES = SAMPLES_PER_SECOND / MAX_FREQUENCY;
 static int const MAX_SAMPLES = SAMPLES_PER_SECOND / MIN_FREQUENCY;
@@ -806,7 +799,14 @@ public:
 			return result;
 		}
 
-		//@TODO: change all buffer pointers to use the global buffer
+		// Linearly interpolates between two 8-bit signed values.
+		char InterpolateChar(char a, char b, char tFrac)
+		{
+			int d = b - a;
+			//@TODO: test casting to char before the addition to save on the 16-bit add
+			return a + ((d * tFrac) >> FIXED_SHIFT);
+		}
+
 		//@TODO: use one function for integer offsets, another for fractional? no need for interpolation? does that make sense with the fixed-point math?
 		//unsigned long GetCorrelationFactorFixed(char* buffer, Fixed fixedOffset)
 		//{
@@ -859,34 +859,34 @@ public:
 			return result;
 		}
 
-		unsigned long GetCorrelationFactorPrime(unsigned long currentCorrellation, int numToDate, unsigned long sumToDate)
-		{
-			//if (numToDate == 0)
-			//{
-			//	return FIXED_ONE;
-			//}
-			//else
-			//{
-				return ((currentCorrellation << FIXED_SHIFT) * numToDate) / sumToDate;
-			//}
-		}
+		//unsigned long GetCorrelationFactorPrime(unsigned long currentCorrellation, int numToDate, unsigned long sumToDate)
+		//{
+		//	//if (numToDate == 0)
+		//	//{
+		//	//	return FIXED_ONE;
+		//	//}
+		//	//else
+		//	//{
+		//		return ((currentCorrellation << FIXED_SHIFT) * numToDate) / sumToDate;
+		//	//}
+		//}
 
-		unsigned long GetCorrelationFactorPrime2(unsigned long currentCorrelation, int numToDate, unsigned long sumToDate)
-		{
-			// Here we don't care about the absolute value; we're just comparing values at various points on the curve to find a local minimum. The default fixed shift
-			// isn't quite large enough to produce values which will be meaningful when divided by the potentially large sumToDate, so we increase the just for this
-			// function.
-			//if (numToDate == 0)
-			//{
-			//	//return (1 << PRIME_SHIFT);
-			//	return 1;
-			//}
-			//else
-			//{
-				//return ((currentCorrelation << PRIME_SHIFT) * numToDate) / (sumToDate >> 8);
-				return (currentCorrelation * numToDate) / (sumToDate >> 8);
-			//}
-		}
+		//unsigned long GetCorrelationFactorPrime2(unsigned long currentCorrelation, int numToDate, unsigned long sumToDate)
+		//{
+		//	// Here we don't care about the absolute value; we're just comparing values at various points on the curve to find a local minimum. The default fixed shift
+		//	// isn't quite large enough to produce values which will be meaningful when divided by the potentially large sumToDate, so we increase the just for this
+		//	// function.
+		//	//if (numToDate == 0)
+		//	//{
+		//	//	//return (1 << PRIME_SHIFT);
+		//	//	return 1;
+		//	//}
+		//	//else
+		//	//{
+		//		//return ((currentCorrelation << PRIME_SHIFT) * numToDate) / (sumToDate >> 8);
+		//		return (currentCorrelation * numToDate) / (sumToDate >> 8);
+		//	//}
+		//}
 
 		// Compute the frequency corresponding to a given a fixed-point offset into our sampling buffer (usually where
 		// the best/minimal autocorrelation was achieved).
@@ -896,8 +896,11 @@ public:
 			return F_CPU / (floatOffset * CPU_CYCLES_PER_SAMPLE);
 		}
 
-		float DetermineSignalPitch()
+		float DetermineSignalPitch(float& minFrequency, float& maxFrequency)
 		{
+			minFrequency = -1.0f;
+			maxFrequency = -1.0f;
+
 			//DEFAULT_PRINT->print("DetermineSignalPitch()"); Ln();
 			static int const AMPLITUDE_THRESHOLD = 30;
 			
@@ -1079,6 +1082,8 @@ public:
 			}
 
 			float result = GetFrequencyForOffsetFixed((static_cast<long>(minBestOffset) + static_cast<long>(maxBestOffset)) >> 1);
+			minFrequency = GetFrequencyForOffsetFixed(maxBestOffset);
+			maxFrequency = GetFrequencyForOffsetFixed(minBestOffset);
 			return result;
 		}
 
@@ -1616,7 +1621,9 @@ public:
 			//float instantFrequency4;
 			//s_correlationStep = 128;
 			//instantFrequency4 = m_channels[0].DetermineSignalPitch(bestOffset4, numCoarseCorrelations, numFineCorrelations);
-			float instantFrequency = m_channels[0].DetermineSignalPitch();
+			float minSignalFrequency = -1.0f;
+			float maxSignalFrequency = -1.0f;
+			float instantFrequency = m_channels[0].DetermineSignalPitch(minSignalFrequency, maxSignalFrequency);
 #if FAKE_FREQUENCY
 			static float t = 0.0f;
 			t += 0.001f;
@@ -1626,14 +1633,14 @@ public:
 
 			DEBUG_PRINT_STATEMENTS(Serial.write("GetMidiNoteIndexForFrequency"); Ln(););
 			m_tunerNote = GetMidiNoteIndexForFrequency(instantFrequency);
-			float centerFrequency = GetFrequencyForMidiNoteIndex(m_tunerNote);
-			float minFrequency = centerFrequency * FREQUENCY_FILTER_WINDOW_RATIO_DOWN;
-			float maxFrequency = centerFrequency * FREQUENCY_FILTER_WINDOW_RATIO_UP;
+			float centerDisplayFrequency = GetFrequencyForMidiNoteIndex(m_tunerNote);
+			float minDisplayFrequency = centerDisplayFrequency * FREQUENCY_FILTER_WINDOW_RATIO_DOWN;
+			float maxDisplayFrequency = centerDisplayFrequency * FREQUENCY_FILTER_WINDOW_RATIO_UP;
 
 			DEBUG_PRINT_STATEMENTS(Serial.write("instantFrequency"); Ln(););
 			if (instantFrequency >= 0.0f)
 			{
-				if ((filteredFrequency >= 0.0f) && (filteredFrequency >= minFrequency) && (filteredFrequency <= maxFrequency))
+				if ((filteredFrequency >= 0.0f) && (filteredFrequency >= minDisplayFrequency) && (filteredFrequency <= maxDisplayFrequency))
 				{
 					static float const RATE = 0.1f;
 					filteredFrequency = (1.0f - RATE) * filteredFrequency + (RATE * instantFrequency);
@@ -1651,13 +1658,13 @@ public:
 #if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL || PRINT_FREQUENCY_TO_SERIAL_VT100
 			DEBUG_PRINT_STATEMENTS(Serial.write("percent"); Ln(););
 			float percent = 0.0f;
-			if (filteredFrequency < centerFrequency)
+			if (filteredFrequency < centerDisplayFrequency)
 			{
-				percent = 0.5f * (filteredFrequency - minFrequency) / (centerFrequency - minFrequency);
+				percent = 0.5f * (filteredFrequency - minDisplayFrequency) / (centerDisplayFrequency - minDisplayFrequency);
 			}
 			else
 			{
-				percent = 0.5f + 0.5f * (filteredFrequency - centerFrequency) / (maxFrequency - centerFrequency);
+				percent = 0.5f + 0.5f * (filteredFrequency - centerDisplayFrequency) / (maxDisplayFrequency - centerDisplayFrequency);
 			}
 #endif // #if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL
 
@@ -1703,7 +1710,7 @@ public:
 			//PrintStringInt("numCoarseCorrelations", numCoarseCorrelations); DEFAULT_PRINT->print("   "); Ln();
 			//PrintStringInt("numFineCorrelations", numFineCorrelations); DEFAULT_PRINT->print("   "); Ln();
 			//PrintStringFloat("Instant freq", instantFrequency); Ln();
-			PrintFloat(instantFrequency); Ln();
+			PrintFloat(instantFrequency); Serial.print(", "); PrintFloat(minSignalFrequency); Serial.print(", "); PrintFloat(maxSignalFrequency); Ln();
 			//PrintStringInt("ofs2", bestOffset2); Ln();
 			//PrintStringFloat("Instant freq 2", instantFrequency2); Ln();
 			//PrintStringInt("ofs3", bestOffset3); Ln();
