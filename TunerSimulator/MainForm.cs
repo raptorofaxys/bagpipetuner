@@ -18,7 +18,8 @@ namespace TunerSimulator
         Task m_serialTask;
 
         Sample[] m_samples;
-        SoundOutput m_so;
+        SoundOutput m_soundOutput;
+        SamplePlayback m_samplePlayback;
 
         object m_frequencyReadingQueueLock = new object();
 
@@ -59,6 +60,12 @@ namespace TunerSimulator
             }
         }
 
+        struct SamplePlayback
+        {
+            public Sample Sample;
+            public float Frequency;
+        }
+
         public MainForm()
         {
             InitializeComponent();
@@ -86,7 +93,8 @@ namespace TunerSimulator
 
         void OnTunerReading(TunerReading tr)
         {
-            lblReading.Text = string.Format("Instant Frequency: {0:###0.00} ({1:###0.00} - {2:###0.00})", tr.SignalFrequency, tr.MinSignalFrequency, tr.MaxSignalFrequency);
+            lblReading.Text = string.Format("Instant Frequency: {0:###0.00} ({1:###0.00} - {2:###0.00}) (expecting: {3})", tr.SignalFrequency, tr.MinSignalFrequency, tr.MaxSignalFrequency, m_samplePlayback.Frequency);
+            lblReading.ForeColor = IsReadingValid(m_samplePlayback.Frequency, tr) ? Color.DarkGreen : ((tr.SignalFrequency >= 0.0f) ? Color.DarkRed : Color.Black);
         }
 
         void FullTunerTest()
@@ -125,7 +133,7 @@ namespace TunerSimulator
                 //for (var frequency = minFrequency; frequency <= maxFrequency; frequency *= mulStep)
                 {
                     var frequency = s.Frequency;
-                    var result = TestPoint(m_so, s, frequency, numTestsPerStep);
+                    var result = TestPoint(m_soundOutput, s, frequency, numTestsPerStep);
                     results[s.Filename].Add(result);
                     Console.WriteLine("{0}: {1:0.00}% ({2})", frequency, result.PassRatio * 100.0f, string.Join(", ", result.Readings.Select(r => r.SignalFrequency)));
                 }
@@ -151,6 +159,16 @@ namespace TunerSimulator
             }
         }
 
+        bool IsReadingValid(float frequency, TunerReading tr)
+        {
+            var maxVariation = 0.1f;
+            var minFrequency = frequency * (1.0f / (1 + maxVariation));
+            var maxFrequency = frequency * (1 + maxVariation);
+
+            return ((tr.SignalFrequency >= minFrequency) && (tr.SignalFrequency <= maxFrequency))
+                || ((frequency >= tr.MinSignalFrequency) && (frequency <= tr.MaxSignalFrequency));
+        }
+
         TestResult TestPoint(SoundOutput so, Sample sample, float frequency, int numReadings)
         {
             // Flush out the sound pipeline before starting the new test
@@ -173,9 +191,6 @@ namespace TunerSimulator
                 }
             }
 
-            var maxVariation = 0.1f;
-            var minFrequency = frequency * (1.0f / (1 + maxVariation));
-            var maxFrequency = frequency * (1 + maxVariation);
             for (; result.NumReadings < numReadings; )
             {
                 var tr = DequeueTunerReading();
@@ -184,8 +199,7 @@ namespace TunerSimulator
                 if (tr.SignalFrequency >= 0.0f)
                 {
                     ++result.NumReadings;
-                    var valid = ((tr.SignalFrequency >= minFrequency) && (tr.SignalFrequency <= maxFrequency))
-                        || ((frequency >= tr.MinSignalFrequency) && (frequency <= tr.MaxSignalFrequency));
+                    var valid = IsReadingValid(frequency, tr);
 
                     if (valid)
                     {
@@ -226,6 +240,7 @@ namespace TunerSimulator
                 new Sample("Chanter HighA 943.raw", 943),
             };
 
+            var offsetFrequencyScale = (float)Math.Pow(2.0f, 1.0f / 12.0f);
             var numOffsetsPerSide = 3;
 
             var y = 0;
@@ -246,7 +261,7 @@ namespace TunerSimulator
                     b.Top = y;
                     b.Width = 50;
                     b.Text = i.ToString();
-                    b.Tag = Tuple.Create(s, i);
+                    b.Tag = new SamplePlayback { Sample = s, Frequency = s.Frequency * (float)Math.Pow(offsetFrequencyScale, i)};
                     b.Click += SampleButtonClicked;
                     pnlSamples.Controls.Add(b);
                     x += b.Width;
@@ -254,8 +269,8 @@ namespace TunerSimulator
                 y += 25;
             }
 
-            m_so = new SoundOutput();
-            m_so.Start();
+            m_soundOutput = new SoundOutput();
+            m_soundOutput.Start();
 
             //m_audioTask = Task.Run(() => FullTunerTest());
             //m_serialTask = Task.Run(() => DumpSerial());
@@ -270,7 +285,7 @@ namespace TunerSimulator
                 Thread.Sleep(50);
             }
 
-            m_so.Stop();
+            m_soundOutput.Stop();
         }
 
         private void ReadTunerFrequencyFromSerial()
@@ -327,16 +342,21 @@ namespace TunerSimulator
 
         private void SampleButtonClicked(object sender, EventArgs e)
         {
-            var t = (Tuple<Sample, int>)((Button)sender).Tag;
-            var sample = t.Item1;
-            var offset = t.Item2;
-            m_so.Sample = sample;
-            m_so.DesiredFrequency = sample.Frequency * (float)Math.Pow(1.1f, offset);
+            var sp = (SamplePlayback)((Button)sender).Tag;
+            m_soundOutput.Sample = sp.Sample;
+            m_soundOutput.DesiredFrequency = sp.Frequency;
+
+            m_samplePlayback = sp;
         }
 
         private void btnTest_Click(object sender, EventArgs e)
         {
             //@TODO
+        }
+
+        private void btnStop_Click(object sender, EventArgs e)
+        {
+            m_soundOutput.Sample = null;
         }
     }
 }

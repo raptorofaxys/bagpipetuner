@@ -33,6 +33,7 @@
             this.lblReading = new System.Windows.Forms.Label();
             this.pnlSamples = new System.Windows.Forms.Panel();
             this.btnTest = new System.Windows.Forms.Button();
+            this.btnStop = new System.Windows.Forms.Button();
             this.SuspendLayout();
             // 
             // spSerial
@@ -67,11 +68,22 @@
             this.btnTest.UseVisualStyleBackColor = true;
             this.btnTest.Click += new System.EventHandler(this.btnTest_Click);
             // 
+            // btnStop
+            // 
+            this.btnStop.Location = new System.Drawing.Point(402, 4);
+            this.btnStop.Name = "btnStop";
+            this.btnStop.Size = new System.Drawing.Size(75, 23);
+            this.btnStop.TabIndex = 2;
+            this.btnStop.Text = "Stop";
+            this.btnStop.UseVisualStyleBackColor = true;
+            this.btnStop.Click += new System.EventHandler(this.btnStop_Click);
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(605, 379);
+            this.Controls.Add(this.btnStop);
             this.Controls.Add(this.btnTest);
             this.Controls.Add(this.pnlSamples);
             this.Controls.Add(this.lblReading);
@@ -90,5 +102,6 @@
         private System.Windows.Forms.Label lblReading;
         private System.Windows.Forms.Panel pnlSamples;
         private System.Windows.Forms.Button btnTest;
+        private System.Windows.Forms.Button btnStop;
     }
 }
