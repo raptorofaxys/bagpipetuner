@@ -292,11 +292,12 @@ namespace TunerSimulator
         {
             spSerial.Handshake = System.IO.Ports.Handshake.None;
             spSerial.Open();
-            
+
             // This loop is quite inefficient in terms of latency but it'll do fine for the purposes of this test harness
+            var buffer = "";
+            var commentBuffer = "";
             for (; !m_closing;)
             {
-                var buffer = "";
                 while (spSerial.BytesToRead > 0)
                 {
                     var c = (char)spSerial.ReadByte();
@@ -307,17 +308,40 @@ namespace TunerSimulator
                     else
                     {
                         buffer = buffer.Trim();
-                        var reading = new TunerReading();
-                        var values = buffer.Split(',');
-                        if (values.Length == 3)
+                        //Console.WriteLine("Buf: {0}", buffer);
+
+                        if (!buffer.StartsWith("#"))
                         {
-                            float.TryParse(values[0], out reading.SignalFrequency);
-                            float.TryParse(values[1], out reading.MinSignalFrequency);
-                            float.TryParse(values[2], out reading.MaxSignalFrequency);
-                            EnqueueTunerReading(reading);
-                            BeginInvoke((Action)(() => OnTunerReading(reading)));
-                            //Console.WriteLine("Tuner frequency: {0} (raw: {1})", f, buffer);
+                            // Flush out any comment
+                            //var o = string.Format("Buf: {0}", commentBuffer);
+                            Console.Write(commentBuffer);
+                            //Console.WriteLine(commentBuffer);
+                            //Console.Out.Flush();
+                            if (!string.IsNullOrEmpty(commentBuffer))
+                            {
+                                var bufferCopy = string.Copy(commentBuffer);
+                                BeginInvoke((Action)(() => Clipboard.SetText(bufferCopy)));
+                            }
+                            commentBuffer = "";
+
+                            var reading = new TunerReading();
+                            var values = buffer.Split(',');
+                            if (values.Length == 3)
+                            {
+                                float.TryParse(values[0], out reading.SignalFrequency);
+                                float.TryParse(values[1], out reading.MinSignalFrequency);
+                                float.TryParse(values[2], out reading.MaxSignalFrequency);
+                                EnqueueTunerReading(reading);
+                                BeginInvoke((Action)(() => OnTunerReading(reading)));
+                                //Console.WriteLine("Tuner frequency: {0} (raw: {1})", reading.SignalFrequency, buffer);
+                            }
                         }
+                        else
+                        {
+                            commentBuffer += buffer.Substring(1) + Console.Out.NewLine;
+                        }
+
+                        buffer = "";
                     }
                 }
 
