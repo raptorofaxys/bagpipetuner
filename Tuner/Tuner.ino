@@ -952,7 +952,7 @@ public:
 			for (;;)
 			{
 				// Alright, now try to figure what the ballpark note this is by calculating autocorrelation
-				static int const OFFSET_STEP = 28;
+				static int const OFFSET_STEP = 12;
 
 				bool inThreshold = false;
 
@@ -965,6 +965,8 @@ public:
 
 				Fixed offsetStep = OFFSET_STEP;
 
+				bool printedBuffer = false;
+
 				// We start a bit before the minimum offset to prime the thresholds
 				//for (Fixed offset = max(offsetAtMinFrequency - OFFSET_STEP * 4, 0); offset < maxSamplesFixed; offset += OFFSET_STEP)
 				// make a function out of the subdivision loop; scan from offset to offset with a given step and adaptive parameters, with a given skip for GCF
@@ -974,8 +976,23 @@ public:
 
 					if (doPrint)
 					{
+						if (!printedBuffer)
+						{
+							//DEFAULT_PRINT->print("#");
+							//for (int i = 0; i < BUFFER_SIZE; ++i)
+							//{
+							//	DEFAULT_PRINT->print(static_cast<int>(g_recordingBuffer[i]));
+							//	if (i != BUFFER_SIZE - 1)
+							//	{
+							//		DEFAULT_PRINT->print(",");
+							//	}
+							//}
+							//Ln();
+							printedBuffer = true;
+						}
 						//PrintStringInt("ofs", offset); DEFAULT_PRINT->print(" ");
 						//PrintStringLong("gcf", curCorrelation); DEFAULT_PRINT->print(" "); Ln();
+						DEFAULT_PRINT->print("#");
 						DEFAULT_PRINT->print(offset); DEFAULT_PRINT->print(", ");
 						DEFAULT_PRINT->print(curCorrelation); DEFAULT_PRINT->print(", ");
 						DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 4) * 4); DEFAULT_PRINT->print(", ");
@@ -993,7 +1010,7 @@ public:
 					if (curCorrelation > maxCorrelation)
 					{
 						maxCorrelation = curCorrelation;
-						correlationDipThreshold = (maxCorrelation * 13) / 100;
+						correlationDipThreshold = (maxCorrelation * 17) / 100;
 						//PrintStringLong("maxCorrelation", maxCorrelation); DEFAULT_PRINT->print(" ");
 						//PrintStringLong("correlationDipThreshold", correlationDipThreshold); Ln();
 					}
@@ -1029,7 +1046,7 @@ public:
 
 					if (curCorrelation >= lastCorrelation)
 					{
-						++offsetStep;
+						offsetStep += 2;
 					}
 					else
 					{
@@ -1074,7 +1091,7 @@ public:
 			}
 		}
 #endif
-				//if (doPrint)// || GetFrequencyForOffsetFixed(bestOffset) > 700.0f)
+				//if (doPrint || GetFrequencyForOffsetFixed(minBestOffset) > 400.0f)
 				{
 					break;
 				}
@@ -1711,6 +1728,9 @@ public:
 			//PrintStringInt("numFineCorrelations", numFineCorrelations); DEFAULT_PRINT->print("   "); Ln();
 			//PrintStringFloat("Instant freq", instantFrequency); Ln();
 			PrintFloat(instantFrequency); Serial.print(", "); PrintFloat(minSignalFrequency); Serial.print(", "); PrintFloat(maxSignalFrequency); Ln();
+			//Serial.print("#Line 1"); Ln();
+			//Serial.print("#Line 2"); Ln();
+			//Serial.print("#Line 3"); Ln();
 			//PrintStringInt("ofs2", bestOffset2); Ln();
 			//PrintStringFloat("Instant freq 2", instantFrequency2); Ln();
 			//PrintStringInt("ofs3", bestOffset3); Ln();
