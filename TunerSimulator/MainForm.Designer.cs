@@ -34,13 +34,16 @@
             this.pnlSamples = new System.Windows.Forms.Panel();
             this.btnTest = new System.Windows.Forms.Button();
             this.btnStop = new System.Windows.Forms.Button();
+            this.chkDumpOnNull = new System.Windows.Forms.CheckBox();
+            this.txtMinDumpFrequency = new System.Windows.Forms.TextBox();
+            this.lblMinDumpFrequency = new System.Windows.Forms.Label();
             this.SuspendLayout();
             // 
             // spSerial
             // 
             this.spSerial.BaudRate = 115200;
             this.spSerial.DtrEnable = true;
-            this.spSerial.PortName = "COM10";
+            this.spSerial.PortName = "COM14";
             // 
             // lblReading
             // 
@@ -55,12 +58,12 @@
             // 
             this.pnlSamples.Location = new System.Drawing.Point(15, 33);
             this.pnlSamples.Name = "pnlSamples";
-            this.pnlSamples.Size = new System.Drawing.Size(543, 334);
+            this.pnlSamples.Size = new System.Drawing.Size(543, 542);
             this.pnlSamples.TabIndex = 1;
             // 
             // btnTest
             // 
-            this.btnTest.Location = new System.Drawing.Point(483, 4);
+            this.btnTest.Location = new System.Drawing.Point(564, 111);
             this.btnTest.Name = "btnTest";
             this.btnTest.Size = new System.Drawing.Size(75, 23);
             this.btnTest.TabIndex = 2;
@@ -70,7 +73,7 @@
             // 
             // btnStop
             // 
-            this.btnStop.Location = new System.Drawing.Point(402, 4);
+            this.btnStop.Location = new System.Drawing.Point(564, 33);
             this.btnStop.Name = "btnStop";
             this.btnStop.Size = new System.Drawing.Size(75, 23);
             this.btnStop.TabIndex = 2;
@@ -78,11 +81,42 @@
             this.btnStop.UseVisualStyleBackColor = true;
             this.btnStop.Click += new System.EventHandler(this.btnStop_Click);
             // 
+            // chkDumpOnNull
+            // 
+            this.chkDumpOnNull.AutoSize = true;
+            this.chkDumpOnNull.Location = new System.Drawing.Point(564, 62);
+            this.chkDumpOnNull.Name = "chkDumpOnNull";
+            this.chkDumpOnNull.Size = new System.Drawing.Size(126, 17);
+            this.chkDumpOnNull.TabIndex = 3;
+            this.chkDumpOnNull.Text = "Dump on null reading";
+            this.chkDumpOnNull.UseVisualStyleBackColor = true;
+            this.chkDumpOnNull.CheckedChanged += new System.EventHandler(this.chkDumpOnNull_CheckedChanged);
+            // 
+            // txtMinDumpFrequency
+            // 
+            this.txtMinDumpFrequency.Location = new System.Drawing.Point(639, 85);
+            this.txtMinDumpFrequency.Name = "txtMinDumpFrequency";
+            this.txtMinDumpFrequency.Size = new System.Drawing.Size(100, 20);
+            this.txtMinDumpFrequency.TabIndex = 4;
+            this.txtMinDumpFrequency.TextChanged += new System.EventHandler(this.txtMinDumpFrequency_TextChanged);
+            // 
+            // lblMinDumpFrequency
+            // 
+            this.lblMinDumpFrequency.AutoSize = true;
+            this.lblMinDumpFrequency.Location = new System.Drawing.Point(564, 88);
+            this.lblMinDumpFrequency.Name = "lblMinDumpFrequency";
+            this.lblMinDumpFrequency.Size = new System.Drawing.Size(69, 13);
+            this.lblMinDumpFrequency.TabIndex = 5;
+            this.lblMinDumpFrequency.Text = "Dump below:";
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(605, 379);
+            this.ClientSize = new System.Drawing.Size(750, 587);
+            this.Controls.Add(this.lblMinDumpFrequency);
+            this.Controls.Add(this.txtMinDumpFrequency);
+            this.Controls.Add(this.chkDumpOnNull);
             this.Controls.Add(this.btnStop);
             this.Controls.Add(this.btnTest);
             this.Controls.Add(this.pnlSamples);
@@ -103,5 +137,8 @@
         private System.Windows.Forms.Panel pnlSamples;
         private System.Windows.Forms.Button btnTest;
         private System.Windows.Forms.Button btnStop;
+        private System.Windows.Forms.CheckBox chkDumpOnNull;
+        private System.Windows.Forms.TextBox txtMinDumpFrequency;
+        private System.Windows.Forms.Label lblMinDumpFrequency;
     }
 }

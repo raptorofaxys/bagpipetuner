@@ -22,6 +22,11 @@ namespace TunerSimulator
         SamplePlayback m_samplePlayback;
 
         object m_frequencyReadingQueueLock = new object();
+        object m_serialSendBufferLock = new object();
+        string m_serialSendBuffer;
+
+        const string SPINNER = @"\|/-";
+        int m_spinnerIndex;
 
         //bool m_runTest = true;
 
@@ -93,8 +98,10 @@ namespace TunerSimulator
 
         void OnTunerReading(TunerReading tr)
         {
-            lblReading.Text = string.Format("Instant Frequency: {0:###0.00} ({1:###0.00} - {2:###0.00}) (expecting: {3})", tr.SignalFrequency, tr.MinSignalFrequency, tr.MaxSignalFrequency, m_samplePlayback.Frequency);
+            lblReading.Text = string.Format("Instant Frequency: {0:###0.00} ({1:###0.00} - {2:###0.00}) (expecting: {3}) {4}", tr.SignalFrequency, tr.MinSignalFrequency, tr.MaxSignalFrequency, m_samplePlayback.Frequency, SPINNER[m_spinnerIndex]);
             lblReading.ForeColor = IsReadingValid(m_samplePlayback.Frequency, tr) ? Color.DarkGreen : ((tr.SignalFrequency >= 0.0f) ? Color.DarkRed : Color.Black);
+
+            m_spinnerIndex = (m_spinnerIndex + 1) % SPINNER.Length;
         }
 
         void FullTunerTest()
@@ -345,9 +352,32 @@ namespace TunerSimulator
                     }
                 }
 
+                var sendBuffer = "";
+                lock (m_serialSendBufferLock)
+                {
+                    if (!string.IsNullOrEmpty(m_serialSendBuffer))
+                    {
+                        sendBuffer = string.Copy(m_serialSendBuffer);
+                        m_serialSendBuffer = "";
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(sendBuffer))
+                {
+                    spSerial.Write(sendBuffer);
+                }
+
                 Thread.Sleep(5);
             }
             spSerial.Close();
+        }
+
+        private void SerialSend(string toSend)
+        {
+            lock (m_serialSendBufferLock)
+            {
+                m_serialSendBuffer += toSend;
+            }
         }
 
         private void DumpSerial()
@@ -381,6 +411,20 @@ namespace TunerSimulator
         private void btnStop_Click(object sender, EventArgs e)
         {
             m_soundOutput.Sample = null;
+        }
+
+        private void chkDumpOnNull_CheckedChanged(object sender, EventArgs e)
+        {
+            SerialSend(chkDumpOnNull.Checked ? "I" : "i");
+        }
+
+        private void txtMinDumpFrequency_TextChanged(object sender, EventArgs e)
+        {
+            float frequency;
+            if (float.TryParse(txtMinDumpFrequency.Text, out frequency))
+            {
+                SerialSend(string.Format("f{0}", frequency));
+            }
         }
     }
 }

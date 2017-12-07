@@ -756,6 +756,9 @@ template <unsigned long i> struct PrintN;
 // fixed memory addresses. The buffer is now shared between the different tuner channels.
 char g_recordingBuffer[BUFFER_SIZE];
 
+bool g_dumpOnNullReading = false;
+float g_dumpBelowFrequency = -1.0f;
+
 class Tuner
 {
 public:
@@ -949,6 +952,7 @@ public:
 			bool doPrint = false;
 			Fixed minBestOffset = ~0;
 			Fixed maxBestOffset = ~0;
+            // Normally we only run once through the below code. This loop is only here in case we need to print the result of some computations. This is normally done when an abnormal result is obtained.
 			for (;;)
 			{
 				// Alright, now try to figure what the ballpark note this is by calculating autocorrelation
@@ -995,13 +999,13 @@ public:
 						DEFAULT_PRINT->print("#");
 						DEFAULT_PRINT->print(offset); DEFAULT_PRINT->print(", ");
 						DEFAULT_PRINT->print(curCorrelation); DEFAULT_PRINT->print(", ");
-						DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 4) * 4); DEFAULT_PRINT->print(", ");
-						DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 8) * 8); DEFAULT_PRINT->print(", ");
-						DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 16) * 16); DEFAULT_PRINT->print(", ");
-						DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 24) * 24); DEFAULT_PRINT->print(", ");
-						DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 32) * 32); DEFAULT_PRINT->print(", ");
-						DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 64) * 64); DEFAULT_PRINT->print(", ");
-						DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 96) * 96); DEFAULT_PRINT->print(", ");
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 4) * 4); DEFAULT_PRINT->print(", ");
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 8) * 8); DEFAULT_PRINT->print(", ");
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 16) * 16); DEFAULT_PRINT->print(", ");
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 24) * 24); DEFAULT_PRINT->print(", ");
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 32) * 32); DEFAULT_PRINT->print(", ");
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 64) * 64); DEFAULT_PRINT->print(", ");
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 96) * 96); DEFAULT_PRINT->print(", ");
 						DEFAULT_PRINT->print(maxCorrelation); DEFAULT_PRINT->print(", ");
 						DEFAULT_PRINT->print(correlationDipThreshold);
 						Ln();
@@ -1064,7 +1068,18 @@ public:
 					PrintStringInt("maxSamplesFixed", maxSamplesFixed); Ln();
 				}
 
-				if (minBestOffset == ~0)
+                if (!doPrint
+                    && (
+                        ((g_dumpBelowFrequency >= 0.0f) && (GetFrequencyForOffsetFixed(minBestOffset) < g_dumpBelowFrequency))
+                        || (g_dumpOnNullReading && (minBestOffset == ~0))
+                        )
+                    )
+                {
+                    doPrint = true;
+                    continue;
+                }
+                
+                if (minBestOffset == ~0)
 				{
 					//DEFAULT_PRINT->print("bestOffset was never set"); Ln();
 					return -1.0f;
@@ -1091,11 +1106,7 @@ public:
 			}
 		}
 #endif
-				//if (doPrint || GetFrequencyForOffsetFixed(minBestOffset) > 400.0f)
-				{
-					break;
-				}
-				doPrint = true;
+				break;
 			}
 
 			float result = GetFrequencyForOffsetFixed((static_cast<long>(minBestOffset) + static_cast<long>(maxBestOffset)) >> 1);
@@ -1578,6 +1589,17 @@ public:
 
 		while(1)
 		{
+            if (Serial.available())
+            {
+                char command = Serial.read();
+                switch (command)
+                {
+                    case 'I': g_dumpOnNullReading = true; break;
+                    case 'i': g_dumpOnNullReading = false; break;
+                    case 'f': g_dumpBelowFrequency = Serial.parseFloat(); break;
+                }
+            }
+
 			DEBUG_PRINT_STATEMENTS(Serial.write("Main tuner loop"); Ln(););
 			
 			DEBUG_PRINT_STATEMENTS(Serial.write("Button updates"); Ln(););
@@ -1672,18 +1694,18 @@ public:
 				filteredFrequency = -1.0f;
 			}
 
-#if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL || PRINT_FREQUENCY_TO_SERIAL_VT100
-			DEBUG_PRINT_STATEMENTS(Serial.write("percent"); Ln(););
-			float percent = 0.0f;
-			if (filteredFrequency < centerDisplayFrequency)
-			{
-				percent = 0.5f * (filteredFrequency - minDisplayFrequency) / (centerDisplayFrequency - minDisplayFrequency);
-			}
-			else
-			{
-				percent = 0.5f + 0.5f * (filteredFrequency - centerDisplayFrequency) / (maxDisplayFrequency - centerDisplayFrequency);
-			}
-#endif // #if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL
+//#if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL || PRINT_FREQUENCY_TO_SERIAL_VT100
+//			DEBUG_PRINT_STATEMENTS(Serial.write("percent"); Ln(););
+//			float percent = 0.0f;
+//			if (filteredFrequency < centerDisplayFrequency)
+//			{
+//				percent = 0.5f * (filteredFrequency - minDisplayFrequency) / (centerDisplayFrequency - minDisplayFrequency);
+//			}
+//			else
+//			{
+//				percent = 0.5f + 0.5f * (filteredFrequency - centerDisplayFrequency) / (maxDisplayFrequency - centerDisplayFrequency);
+//			}
+//#endif // #if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL
 
 #if ENABLE_LCD
 			RenderWideGlyphForNote(m_tunerNote);
@@ -1709,9 +1731,7 @@ public:
 #endif // #if ENABLE_LCD
 
 			unsigned long nowMicros = micros();
-			unsigned long deltaMicros = nowMicros - m_lastMicros;
-
-			float sps = 1000000.0f / deltaMicros;
+			//unsigned long deltaMicros = nowMicros - m_lastMicros;
 
 			m_lastMicros = nowMicros;
 
@@ -1721,7 +1741,8 @@ public:
 			Serial.print("\x1B[0m");
 #endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
 			//Serial.print("-----"); Ln();
-			//PrintStringFloat("SPS ", sps); Ln();
+            //float sps = 1000000.0f / deltaMicros;
+            //PrintStringFloat("SPS ", sps); Ln();
 			//PrintStringInt("ofs (int)", bestOffset); Ln();
 			//PrintStringFloat("ofs (float)", FIXED2F(bestOffset)); Ln();
 			//PrintStringInt("numCoarseCorrelations", numCoarseCorrelations); DEFAULT_PRINT->print("   "); Ln();
