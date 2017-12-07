@@ -135,8 +135,24 @@ namespace TunerSimulator
             Trace.Assert(m_waveOut == null);
             provider.SetWaveFormat(44100, 1);
 
+            var outputNumber = -1;
+            for (var i = 0; i < WaveOut.DeviceCount; ++i)
+            {
+                var caps = WaveOut.GetCapabilities(i);
+                Console.WriteLine("{0}: {1}", i, caps.ProductName);
+                if (caps.ProductName.Contains("3/4"))
+                {
+                    outputNumber = i;
+                }
+            }
+
+            if (outputNumber < 0)
+            {
+                throw new Exception("Unable to locate Saffire 3/4 output");
+            }
+
             m_waveOut = new WaveOut();
-            m_waveOut.DeviceNumber = 8;
+            m_waveOut.DeviceNumber = outputNumber;
 
             m_waveOut.Init(provider);
             m_waveOut.Play();
