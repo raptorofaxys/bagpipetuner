@@ -758,6 +758,7 @@ char g_recordingBuffer[BUFFER_SIZE];
 
 bool g_dumpOnNullReading = false;
 float g_dumpBelowFrequency = -1.0f;
+int g_correlationDipThresholdPercent = 17;
 
 class Tuner
 {
@@ -899,7 +900,7 @@ public:
 			return F_CPU / (floatOffset * CPU_CYCLES_PER_SAMPLE);
 		}
 
-		float DetermineSignalPitch(float& minFrequency, float& maxFrequency)
+		float DetermineSignalPitch(float& minFrequency, float& maxFrequency, int& signalMin, int& signalMax)
 		{
 			minFrequency = -1.0f;
 			maxFrequency = -1.0f;
@@ -910,8 +911,8 @@ public:
 			DEBUG_PRINT_STATEMENTS(Serial.write("DetermineSignalPitch()"); Ln(););
 
 			// Sample the signal into our buffer, and track its amplitude.
-			int signalMin = INT_MAX;
-			int signalMax = INT_MIN;
+			signalMin = INT_MAX;
+			signalMax = INT_MIN;
 			int maxAmplitude = -1;
 			for (int i = 0; i < BUFFER_SIZE; ++i)
 			{
@@ -976,7 +977,7 @@ public:
 				// make a function out of the subdivision loop; scan from offset to offset with a given step and adaptive parameters, with a given skip for GCF
 				for (Fixed offset = (offsetToStartPreciseSampling >> 1); offset < maxSamplesFixed; )
 				{
-					unsigned long curCorrelation = GetCorrelationFactorFixed(offset, 1) << 8; // was using 96, which worked for the simple function generator but didn't work quite as well for the bagpipe signal
+					unsigned long curCorrelation = GetCorrelationFactorFixed(offset, 2) << 8; // was using 96, which worked for the simple function generator but didn't work quite as well for the bagpipe signal
 
 					if (doPrint)
 					{
@@ -1014,7 +1015,7 @@ public:
 					if (curCorrelation > maxCorrelation)
 					{
 						maxCorrelation = curCorrelation;
-						correlationDipThreshold = (maxCorrelation * 17) / 100;
+						correlationDipThreshold = (maxCorrelation * g_correlationDipThresholdPercent) / 100;
 						//PrintStringLong("maxCorrelation", maxCorrelation); DEFAULT_PRINT->print(" ");
 						//PrintStringLong("correlationDipThreshold", correlationDipThreshold); Ln();
 					}
@@ -1070,7 +1071,7 @@ public:
 
                 if (!doPrint
                     && (
-                        ((g_dumpBelowFrequency >= 0.0f) && (GetFrequencyForOffsetFixed(minBestOffset) < g_dumpBelowFrequency))
+                        ((g_dumpBelowFrequency >= 0.0f) && (minBestOffset != ~0) && (GetFrequencyForOffsetFixed(minBestOffset) < g_dumpBelowFrequency))
                         || (g_dumpOnNullReading && (minBestOffset == ~0))
                         )
                     )
@@ -1597,6 +1598,7 @@ public:
                     case 'I': g_dumpOnNullReading = true; break;
                     case 'i': g_dumpOnNullReading = false; break;
                     case 'f': g_dumpBelowFrequency = Serial.parseFloat(); break;
+                    case 'd': g_correlationDipThresholdPercent = Serial.parseInt(); break;
                 }
             }
 
@@ -1662,7 +1664,9 @@ public:
 			//instantFrequency4 = m_channels[0].DetermineSignalPitch(bestOffset4, numCoarseCorrelations, numFineCorrelations);
 			float minSignalFrequency = -1.0f;
 			float maxSignalFrequency = -1.0f;
-			float instantFrequency = m_channels[0].DetermineSignalPitch(minSignalFrequency, maxSignalFrequency);
+            int signalMin = 0;
+            int signalMax = 0;
+			float instantFrequency = m_channels[0].DetermineSignalPitch(minSignalFrequency, maxSignalFrequency, signalMin, signalMax);
 #if FAKE_FREQUENCY
 			static float t = 0.0f;
 			t += 0.001f;
@@ -1748,7 +1752,11 @@ public:
 			//PrintStringInt("numCoarseCorrelations", numCoarseCorrelations); DEFAULT_PRINT->print("   "); Ln();
 			//PrintStringInt("numFineCorrelations", numFineCorrelations); DEFAULT_PRINT->print("   "); Ln();
 			//PrintStringFloat("Instant freq", instantFrequency); Ln();
-			PrintFloat(instantFrequency); Serial.print(", "); PrintFloat(minSignalFrequency); Serial.print(", "); PrintFloat(maxSignalFrequency); Ln();
+			PrintFloat(instantFrequency); Serial.print(", ");
+            PrintFloat(minSignalFrequency); Serial.print(", ");
+            PrintFloat(maxSignalFrequency); Serial.print(", ");
+            Serial.print(signalMin); Serial.print(", ");
+            Serial.print(signalMax); Ln();
 			//Serial.print("#Line 1"); Ln();
 			//Serial.print("#Line 2"); Ln();
 			//Serial.print("#Line 3"); Ln();

@@ -35,6 +35,8 @@ namespace TunerSimulator
             public float SignalFrequency;
             public float MinSignalFrequency;
             public float MaxSignalFrequency;
+            public float MinSignalAmplitude;
+            public float MaxSignalAmplitude;
         }
 
         Queue<TunerReading> m_tunerReadingQueue = new Queue<TunerReading>();
@@ -74,6 +76,8 @@ namespace TunerSimulator
         public MainForm()
         {
             InitializeComponent();
+
+            txtCorrelationDipPct.Text = 17.ToString();
         }
 
         void EnqueueTunerReading(TunerReading tr)
@@ -98,7 +102,14 @@ namespace TunerSimulator
 
         void OnTunerReading(TunerReading tr)
         {
-            lblReading.Text = string.Format("Instant Frequency: {0:###0.00} ({1:###0.00} - {2:###0.00}) (expecting: {3}) {4}", tr.SignalFrequency, tr.MinSignalFrequency, tr.MaxSignalFrequency, m_samplePlayback.Frequency, SPINNER[m_spinnerIndex]);
+            lblReading.Text = string.Format("Instant Frequency: {0:###0.00} ({1:###0.00} - {2:###0.00}) (expecting: {3}) [{4}, {5}] {6}",
+                tr.SignalFrequency,
+                tr.MinSignalFrequency,
+                tr.MaxSignalFrequency,
+                m_samplePlayback.Frequency,
+                tr.MinSignalAmplitude,
+                tr.MaxSignalAmplitude,
+                SPINNER[m_spinnerIndex]);
             lblReading.ForeColor = IsReadingValid(m_samplePlayback.Frequency, tr) ? Color.DarkGreen : ((tr.SignalFrequency >= 0.0f) ? Color.DarkRed : Color.Black);
 
             m_spinnerIndex = (m_spinnerIndex + 1) % SPINNER.Length;
@@ -333,11 +344,13 @@ namespace TunerSimulator
 
                             var reading = new TunerReading();
                             var values = buffer.Split(',');
-                            if (values.Length == 3)
+                            if (values.Length == 5)
                             {
                                 float.TryParse(values[0], out reading.SignalFrequency);
                                 float.TryParse(values[1], out reading.MinSignalFrequency);
                                 float.TryParse(values[2], out reading.MaxSignalFrequency);
+                                float.TryParse(values[3], out reading.MinSignalAmplitude);
+                                float.TryParse(values[4], out reading.MaxSignalAmplitude);
                                 EnqueueTunerReading(reading);
                                 BeginInvoke((Action)(() => OnTunerReading(reading)));
                                 //Console.WriteLine("Tuner frequency: {0} (raw: {1})", reading.SignalFrequency, buffer);
@@ -394,6 +407,14 @@ namespace TunerSimulator
             spSerial.Close();
         }
 
+        private void UpdateAutoDumpFrequency()
+        {
+            if (chkDumpOnOctaveError.Checked)
+            {
+                txtMinDumpFrequency.Text = (m_soundOutput.DesiredFrequency * (5.0f / 8.0f)).ToString();
+            }
+        }
+
         private void SampleButtonClicked(object sender, EventArgs e)
         {
             var sp = (SamplePlayback)((Button)sender).Tag;
@@ -401,6 +422,8 @@ namespace TunerSimulator
             m_soundOutput.DesiredFrequency = sp.Frequency;
 
             m_samplePlayback = sp;
+
+            UpdateAutoDumpFrequency();
         }
 
         private void btnTest_Click(object sender, EventArgs e)
@@ -411,6 +434,9 @@ namespace TunerSimulator
         private void btnStop_Click(object sender, EventArgs e)
         {
             m_soundOutput.Sample = null;
+            chkDumpOnNull.Checked = false;
+            chkDumpOnOctaveError.Checked = false;
+            txtMinDumpFrequency.Text = "-1";
         }
 
         private void chkDumpOnNull_CheckedChanged(object sender, EventArgs e)
@@ -424,6 +450,20 @@ namespace TunerSimulator
             if (float.TryParse(txtMinDumpFrequency.Text, out frequency))
             {
                 SerialSend(string.Format("f{0}", frequency));
+            }
+        }
+
+        private void chkDumpOnOctaveError_CheckedChanged(object sender, EventArgs e)
+        {
+            UpdateAutoDumpFrequency();
+        }
+
+        private void txtCorrelationDipPct_TextChanged(object sender, EventArgs e)
+        {
+            int percent;
+            if (int.TryParse(txtCorrelationDipPct.Text, out percent))
+            {
+                SerialSend(string.Format("d{0}", percent));
             }
         }
     }
