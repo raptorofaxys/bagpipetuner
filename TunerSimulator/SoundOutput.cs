@@ -148,7 +148,13 @@ namespace TunerSimulator
 
             if (outputNumber < 0)
             {
-                throw new Exception("Unable to locate Saffire 3/4 output");
+                Console.WriteLine("Unable to locate Saffire 3/4 output; defaulting to output 0");
+                outputNumber = 0;
+
+                if (WaveOut.DeviceCount < 1)
+                {
+                    throw new Exception("No audio device outputs available");
+                }
             }
 
             m_waveOut = new WaveOut();
