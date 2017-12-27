@@ -760,6 +760,17 @@ bool g_dumpOnNullReading = false;
 float g_dumpBelowFrequency = -1.0f;
 int g_correlationDipThresholdPercent = 17;
 
+namespace DumpMode
+{
+    enum Type
+    {
+        DumpBuffer,
+        DumpGcf
+    };
+}
+
+DumpMode::Type g_dumpMode = DumpMode::DumpGcf;
+
 class Tuner
 {
 public:
@@ -953,7 +964,7 @@ public:
 			bool doPrint = false;
 			Fixed minBestOffset = ~0;
 			Fixed maxBestOffset = ~0;
-            // Normally we only run once through the below code. This loop is only here in case we need to print the result of some computations. This is normally done when an abnormal result is obtained.
+            // Normally we only run once through the below code. This loop is only here in case we need to print the result of some computations. This is typically done when an abnormal result is obtained.
 			for (;;)
 			{
 				// Alright, now try to figure what the ballpark note this is by calculating autocorrelation
@@ -970,7 +981,20 @@ public:
 
 				Fixed offsetStep = OFFSET_STEP;
 
-				bool printedBuffer = false;
+                if (doPrint && (g_dumpMode == DumpMode::DumpBuffer))
+                {
+                    for (int i = 0; i < BUFFER_SIZE; ++i)
+                    {
+                        DEFAULT_PRINT->print("#");
+                        DEFAULT_PRINT->print(static_cast<int>(g_recordingBuffer[i]));
+                        Ln();
+                        //if (i != BUFFER_SIZE - 1)
+                        //{
+                        //	DEFAULT_PRINT->print(",");
+                        //}
+                    }
+                    //Ln();
+                }
 
 				// We start a bit before the minimum offset to prime the thresholds
 				//for (Fixed offset = max(offsetAtMinFrequency - OFFSET_STEP * 4, 0); offset < maxSamplesFixed; offset += OFFSET_STEP)
@@ -979,22 +1003,8 @@ public:
 				{
 					unsigned long curCorrelation = GetCorrelationFactorFixed(offset, 2) << 8; // was using 96, which worked for the simple function generator but didn't work quite as well for the bagpipe signal
 
-					if (doPrint)
+					if (doPrint && (g_dumpMode == DumpMode::DumpGcf))
 					{
-						if (!printedBuffer)
-						{
-							//DEFAULT_PRINT->print("#");
-							//for (int i = 0; i < BUFFER_SIZE; ++i)
-							//{
-							//	DEFAULT_PRINT->print(static_cast<int>(g_recordingBuffer[i]));
-							//	if (i != BUFFER_SIZE - 1)
-							//	{
-							//		DEFAULT_PRINT->print(",");
-							//	}
-							//}
-							//Ln();
-							printedBuffer = true;
-						}
 						//PrintStringInt("ofs", offset); DEFAULT_PRINT->print(" ");
 						//PrintStringLong("gcf", curCorrelation); DEFAULT_PRINT->print(" "); Ln();
 						DEFAULT_PRINT->print("#");
@@ -1062,12 +1072,12 @@ public:
 					lastCorrelation = curCorrelation;
 				}
 
-				if (doPrint)
-				{
-					PrintStringInt("minBestOffset", minBestOffset); Ln();
-					PrintStringInt("maxBestOffset", maxBestOffset); Ln();
-					PrintStringInt("maxSamplesFixed", maxSamplesFixed); Ln();
-				}
+				//if (doPrint)
+				//{
+				//	PrintStringInt("minBestOffset", minBestOffset); Ln();
+				//	PrintStringInt("maxBestOffset", maxBestOffset); Ln();
+				//	PrintStringInt("maxSamplesFixed", maxSamplesFixed); Ln();
+				//}
 
                 if (!doPrint
                     && (
@@ -1599,6 +1609,8 @@ public:
                     case 'i': g_dumpOnNullReading = false; break;
                     case 'f': g_dumpBelowFrequency = Serial.parseFloat(); break;
                     case 'd': g_correlationDipThresholdPercent = Serial.parseInt(); break;
+                    case 'b': g_dumpMode = DumpMode::DumpBuffer; break;
+                    case 'g': g_dumpMode = DumpMode::DumpGcf; break;
                 }
             }
 

@@ -78,6 +78,7 @@ namespace TunerSimulator
             InitializeComponent();
 
             txtCorrelationDipPct.Text = 17.ToString();
+            cmbDumpMode.SelectedIndex = 1;
         }
 
         void EnqueueTunerReading(TunerReading tr)
@@ -465,6 +466,11 @@ namespace TunerSimulator
             {
                 SerialSend(string.Format("d{0}", percent));
             }
+        }
+
+        private void cmbDumpMode_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            SerialSend(cmbDumpMode.SelectedIndex == 0 ? "b" : "g");
         }
     }
 }

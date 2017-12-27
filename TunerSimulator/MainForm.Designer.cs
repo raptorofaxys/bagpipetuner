@@ -40,6 +40,7 @@
             this.chkDumpOnOctaveError = new System.Windows.Forms.CheckBox();
             this.lblCorrelationDipPct = new System.Windows.Forms.Label();
             this.txtCorrelationDipPct = new System.Windows.Forms.TextBox();
+            this.cmbDumpMode = new System.Windows.Forms.ComboBox();
             this.SuspendLayout();
             // 
             // spSerial
@@ -66,7 +67,8 @@
             // 
             // btnTest
             // 
-            this.btnTest.Location = new System.Drawing.Point(564, 213);
+            this.btnTest.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
+            this.btnTest.Location = new System.Drawing.Point(569, 552);
             this.btnTest.Name = "btnTest";
             this.btnTest.Size = new System.Drawing.Size(75, 23);
             this.btnTest.TabIndex = 2;
@@ -140,11 +142,25 @@
             this.txtCorrelationDipPct.TabIndex = 7;
             this.txtCorrelationDipPct.TextChanged += new System.EventHandler(this.txtCorrelationDipPct_TextChanged);
             // 
+            // cmbDumpMode
+            // 
+            this.cmbDumpMode.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
+            this.cmbDumpMode.FormattingEnabled = true;
+            this.cmbDumpMode.Items.AddRange(new object[] {
+            "Dump Buffer",
+            "Dump GCF"});
+            this.cmbDumpMode.Location = new System.Drawing.Point(564, 213);
+            this.cmbDumpMode.Name = "cmbDumpMode";
+            this.cmbDumpMode.Size = new System.Drawing.Size(121, 21);
+            this.cmbDumpMode.TabIndex = 9;
+            this.cmbDumpMode.SelectedIndexChanged += new System.EventHandler(this.cmbDumpMode_SelectedIndexChanged);
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(750, 587);
+            this.Controls.Add(this.cmbDumpMode);
             this.Controls.Add(this.lblCorrelationDipPct);
             this.Controls.Add(this.txtCorrelationDipPct);
             this.Controls.Add(this.chkDumpOnOctaveError);
@@ -177,5 +193,6 @@
         private System.Windows.Forms.CheckBox chkDumpOnOctaveError;
         private System.Windows.Forms.Label lblCorrelationDipPct;
         private System.Windows.Forms.TextBox txtCorrelationDipPct;
+        private System.Windows.Forms.ComboBox cmbDumpMode;
     }
 }
