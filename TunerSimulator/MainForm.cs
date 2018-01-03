@@ -309,6 +309,12 @@ namespace TunerSimulator
 
         private void ReadTunerFrequencyFromSerial()
         {
+            //var portNames = System.IO.Ports.SerialPort.GetPortNames();
+            //foreach (var s in portNames)
+            //{
+            //    Console.WriteLine(s);
+            //}
+
             spSerial.Handshake = System.IO.Ports.Handshake.None;
             spSerial.Open();
 
@@ -381,7 +387,7 @@ namespace TunerSimulator
                     spSerial.Write(sendBuffer);
                 }
 
-                Thread.Sleep(5);
+                Thread.Sleep(3);
             }
             spSerial.Close();
         }
