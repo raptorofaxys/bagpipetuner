@@ -737,14 +737,14 @@ static int const ADC_CLOCKS_PER_ADC_CONVERSION = 13;
 static unsigned long const CPU_CYCLES_PER_SAMPLE = ADC_CLOCKS_PER_ADC_CONVERSION * PRESCALER_DIVIDE;
 static unsigned long const SAMPLES_PER_SECOND = F_CPU / CPU_CYCLES_PER_SAMPLE;
 
-static int const MIN_FREQUENCY = 75;
-static int const MAX_FREQUENCY = 1100;
-static int const MIN_SAMPLES = SAMPLES_PER_SECOND / MAX_FREQUENCY;
-static int const MAX_SAMPLES = SAMPLES_PER_SECOND / MIN_FREQUENCY;
-static int const WINDOW_SIZE = MAX_SAMPLES; //96; // samples
-static int const BUFFER_SIZE = WINDOW_SIZE + MAX_SAMPLES + 1; // for interpolation
+static int const ABSOLUTE_MIN_FREQUENCY = 75;
+static int const ABSOLUTE_MAX_FREQUENCY = 1100;
+static int const ABSOLUTE_MIN_SAMPLES = SAMPLES_PER_SECOND / ABSOLUTE_MAX_FREQUENCY;
+static int const ABSOLUTE_MAX_SAMPLES = SAMPLES_PER_SECOND / ABSOLUTE_MIN_FREQUENCY;
+//static int const WINDOW_SIZE = ABSOLUTE_MAX_SAMPLES; //96; // samples
+static int const MAX_BUFFER_SIZE = 2 * ABSOLUTE_MAX_SAMPLES + 1; // for interpolation
 //STATIC_ASSERT(true);
-STATIC_ASSERT((SAMPLES_PER_SECOND / 2) > MAX_FREQUENCY);
+STATIC_ASSERT((SAMPLES_PER_SECOND / 2) > ABSOLUTE_MAX_FREQUENCY);
 
 template <unsigned long i> struct PrintN;
 //PrintN<SAMPLES_PER_SECOND> n1;
@@ -754,11 +754,10 @@ template <unsigned long i> struct PrintN;
 
 // This buffer is now global because we need to the compiler to use faster addressing modes that are only available with
 // fixed memory addresses. The buffer is now shared between the different tuner channels.
-char g_recordingBuffer[BUFFER_SIZE];
+char g_recordingBuffer[MAX_BUFFER_SIZE];
 
 bool g_dumpOnNullReading = false;
 float g_dumpBelowFrequency = -1.0f;
-int g_correlationDipThresholdPercent = 17;
 
 namespace DumpMode
 {
@@ -779,6 +778,14 @@ public:
 	class Channel
 	{
 	public:
+		Channel()
+		{
+			m_gcfStep = 4;
+			m_correlationDipThresholdPercent = 25;
+			m_baseOffsetStep = 4;
+			m_baseOffsetStepIncrement = 2;
+		}
+
 		void SetPin(int audioPin)
 		{
 			m_audioPin = audioPin;
@@ -847,7 +854,7 @@ public:
 		//	return result;
 		//}
 		
-		unsigned long GetCorrelationFactorFixed(Fixed fixedOffset, int correlationStep)
+		unsigned long GetCorrelationFactorFixed(Fixed fixedOffset, int windowSize, int correlationStep)
 		{
 			unsigned long result = 0;
 			int integer = FIXED_INT(fixedOffset);
@@ -863,9 +870,10 @@ public:
 			char* pB = &g_recordingBuffer[integer];
 			char* pB2 = pB + 1;
 
-			for (int i = 0; i < WINDOW_SIZE; i += correlationStep, pA += correlationStep, pB += correlationStep, pB2 += correlationStep)
+			//@OPTIMIZE: for B, move b2 into b, then indirect-read the new b2? might not make a difference
+			for (int i = 0; i < windowSize; i += correlationStep, pA += correlationStep, pB += correlationStep, pB2 += correlationStep)
 			{
-				// Note this is done with 16-bit math; this is slower, but gives more precision.  In tests, using 8-bit fixed-point
+				// Note this is done with 16-bit math; this is slower, but gives more precision. In tests, using 8-bit fixed-point
 				// math did not yield sufficient precision.
 				int a = *pA;
 				int b = InterpolateChar(*pB, *pB2, frac);
@@ -913,6 +921,10 @@ public:
 
 		float DetermineSignalPitch(float& minFrequency, float& maxFrequency, int& signalMin, int& signalMax)
 		{
+			int minSamples = SAMPLES_PER_SECOND / m_maxFrequency;
+			int maxSamples = SAMPLES_PER_SECOND / m_minFrequency;
+			int bufferSize = 2 * maxSamples + 1;
+
 			minFrequency = -1.0f;
 			maxFrequency = -1.0f;
 
@@ -925,7 +937,8 @@ public:
 			signalMin = INT_MAX;
 			signalMax = INT_MIN;
 			int maxAmplitude = -1;
-			for (int i = 0; i < BUFFER_SIZE; ++i)
+			//for (int i = 0; i < BUFFER_SIZE; ++i)
+			for (int i = 0; i < bufferSize; ++i)
 			{
 				g_recordingBuffer[i] = ReadInput8BitsSigned();
 				signalMin = min(g_recordingBuffer[i], signalMin);
@@ -968,22 +981,20 @@ public:
 			for (;;)
 			{
 				// Alright, now try to figure what the ballpark note this is by calculating autocorrelation
-				static int const OFFSET_STEP = 12;
-
 				bool inThreshold = false;
 
-				const Fixed maxSamplesFixed = I2FIXED(MAX_SAMPLES);
+				const Fixed maxSamplesFixed = I2FIXED(maxSamples);
 				unsigned long maxCorrelation = 0;
 				unsigned long correlationDipThreshold = 0;
 				unsigned long bestCorrelation = ~0;
-				const Fixed offsetToStartPreciseSampling = I2FIXED(MIN_SAMPLES - 2);
+				const Fixed offsetToStartPreciseSampling = I2FIXED(minSamples- 2);
 				unsigned long lastCorrelation = ~0;
 
-				Fixed offsetStep = OFFSET_STEP;
+				Fixed offsetStep = m_baseOffsetStep;
 
                 if (doPrint && (g_dumpMode == DumpMode::DumpBuffer))
                 {
-                    for (int i = 0; i < BUFFER_SIZE; ++i)
+                    for (int i = 0; i < bufferSize; ++i)
                     {
                         DEFAULT_PRINT->print("#");
                         DEFAULT_PRINT->print(static_cast<int>(g_recordingBuffer[i]));
@@ -1001,7 +1012,9 @@ public:
 				// make a function out of the subdivision loop; scan from offset to offset with a given step and adaptive parameters, with a given skip for GCF
 				for (Fixed offset = (offsetToStartPreciseSampling >> 1); offset < maxSamplesFixed; )
 				{
-					unsigned long curCorrelation = GetCorrelationFactorFixed(offset, 2) << 8; // was using 96, which worked for the simple function generator but didn't work quite as well for the bagpipe signal
+                    //@TODO: why the shift here? is this a legacy artifact?
+                    //unsigned long curCorrelation = GetCorrelationFactorFixed(offset, 2) << 8; // was using 96, which worked for the simple function generator but didn't work quite as well for the bagpipe signal
+                    unsigned long curCorrelation = GetCorrelationFactorFixed(offset, maxSamples, m_gcfStep);
 
 					if (doPrint && (g_dumpMode == DumpMode::DumpGcf))
 					{
@@ -1025,14 +1038,14 @@ public:
 					if (curCorrelation > maxCorrelation)
 					{
 						maxCorrelation = curCorrelation;
-						correlationDipThreshold = (maxCorrelation * g_correlationDipThresholdPercent) / 100;
+						correlationDipThreshold = (maxCorrelation * m_correlationDipThresholdPercent) / 100;
 						//PrintStringLong("maxCorrelation", maxCorrelation); DEFAULT_PRINT->print(" ");
 						//PrintStringLong("correlationDipThreshold", correlationDipThreshold); Ln();
 					}
 
 					if (offset < offsetToStartPreciseSampling)
 					{
-						offset += OFFSET_STEP * 4;
+						offset += m_baseOffsetStep * 4;
 						continue;
 					}
 
@@ -1061,11 +1074,11 @@ public:
 
 					if (curCorrelation >= lastCorrelation)
 					{
-						offsetStep += 2;
+						offsetStep += m_baseOffsetStepIncrement;
 					}
 					else
 					{
-						offsetStep = OFFSET_STEP;
+						offsetStep = m_baseOffsetStep;
 					}
 
 					offset += offsetStep;
@@ -1126,6 +1139,13 @@ public:
 			return result;
 		}
 
+		int m_gcfStep;
+		int m_correlationDipThresholdPercent;
+		int m_baseOffsetStep;
+		int m_baseOffsetStepIncrement;
+
+		int m_minFrequency;
+		int m_maxFrequency;
 	private:
 		int m_audioPin;
 	};
@@ -1273,7 +1293,7 @@ public:
 
 		//m_a440.ul = LoadEepromLong(0);
 		m_a440.f = DEFAULT_A440; //@HACK
-		if ((m_a440.f < MIN_FREQUENCY) || (m_a440.f > MAX_FREQUENCY))
+		if ((m_a440.f < ABSOLUTE_MIN_FREQUENCY) || (m_a440.f > ABSOLUTE_MAX_FREQUENCY))
 		{
 			DEBUG_PRINT_STATEMENTS(
 			{
@@ -1544,14 +1564,14 @@ public:
 				buttonPressed = true;
 			}
 
-			if (m_a440.f < MIN_FREQUENCY)
+			if (m_a440.f < ABSOLUTE_MIN_FREQUENCY)
 			{
-				m_a440.f = MIN_FREQUENCY;
+				m_a440.f = ABSOLUTE_MIN_FREQUENCY;
 			}
 
-			if (m_a440.f > MAX_FREQUENCY)
+			if (m_a440.f > ABSOLUTE_MAX_FREQUENCY)
 			{
-				m_a440.f = MAX_FREQUENCY;
+				m_a440.f = ABSOLUTE_MAX_FREQUENCY;
 			}
 
 			if (buttonPressed)
@@ -1598,6 +1618,7 @@ public:
 
 		float filteredFrequency = -1.0f;
 
+		int activeChannelIndex = 0;
 		while(1)
 		{
             if (Serial.available())
@@ -1608,9 +1629,12 @@ public:
                     case 'I': g_dumpOnNullReading = true; break;
                     case 'i': g_dumpOnNullReading = false; break;
                     case 'f': g_dumpBelowFrequency = Serial.parseFloat(); break;
-                    case 'd': g_correlationDipThresholdPercent = Serial.parseInt(); break;
-                    case 'b': g_dumpMode = DumpMode::DumpBuffer; break;
-                    case 'g': g_dumpMode = DumpMode::DumpGcf; break;
+					case 'c': activeChannelIndex = Serial.parseInt(); break; // @PCHANGE
+					case 'p': m_channels[activeChannelIndex].m_correlationDipThresholdPercent = Serial.parseInt(); break;// @PCHANGE
+					case 'g': m_channels[activeChannelIndex].m_gcfStep = max(Serial.parseInt(), 1); break;// @PCHANGE
+					case 'o': m_channels[activeChannelIndex].m_baseOffsetStep = max(Serial.parseInt(), 1); break;// @PCHANGE
+					case 's': m_channels[activeChannelIndex].m_baseOffsetStepIncrement = Serial.parseInt(); break;// @PCHANGE
+					case 'd': g_dumpMode = Serial.parseInt(); break;
                 }
             }
 
