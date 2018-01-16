@@ -30,6 +30,8 @@ namespace TunerSimulator
 
         //bool m_runTest = true;
 
+        bool m_initializedTuner = false;
+
         struct TunerReading
         {
             public float SignalFrequency;
@@ -43,18 +45,22 @@ namespace TunerSimulator
 
         class TestResult
         {
+            public string SampleName;
             public float Frequency;
-            public int NumRejected;
-            public int NumReadings;
+            public int NumRejectedReadings;
+            public int NumValidReadings;
+
             public int NumPassed;
             public int NumFailed;
+            public int NumWrongOctaveReadings;
+
             public List<TunerReading> Readings = new List<TunerReading>();
 
             public bool Passed
             {
                 get
                 {
-                    return NumPassed == NumReadings;
+                    return NumPassed == NumValidReadings;
                 }
             }
 
@@ -62,7 +68,23 @@ namespace TunerSimulator
             {
                 get
                 {
-                    return (float)NumPassed / NumReadings;
+                    return (float)NumPassed / NumValidReadings;
+                }
+            }
+
+            public float RejectionRatio
+            {
+                get
+                {
+                    return (float)NumRejectedReadings / (NumValidReadings + NumRejectedReadings);
+                }
+            }
+
+            public float WrongOctaveFailReasonRatio
+            {
+                get
+                {
+                    return (NumFailed > 0) ? (float)NumWrongOctaveReadings / NumFailed : 0.0f;
                 }
             }
         }
@@ -77,8 +99,12 @@ namespace TunerSimulator
         {
             InitializeComponent();
 
-            txtCorrelationDipPct.Text = 17.ToString();
             cmbDumpMode.SelectedIndex = 1;
+        }
+
+        void InitializeTuner()
+        {
+            txtCorrelationDipPct.Text = 25.ToString();
         }
 
         void EnqueueTunerReading(TunerReading tr)
@@ -97,7 +123,9 @@ namespace TunerSimulator
             }
             lock (m_frequencyReadingQueueLock)
             {
-                return m_tunerReadingQueue.Dequeue();
+                var reading = m_tunerReadingQueue.Dequeue();
+                //Console.WriteLine("(read: {0})", reading.SignalFrequency);
+                return reading;
             }
         }
 
@@ -118,52 +146,41 @@ namespace TunerSimulator
 
         void FullTunerTest()
         {
-            //var chanter = new Sample("chanter 594.raw", 594);
-            //var tenor = new Sample("tenor drone 239.raw", 239);
+            var numTestsPerStep = 16;
 
-            //foreach (var s in samples)
-            //{
-            //    so.Sample = s;
-            //    so.DesiredFrequency = s.Frequency;
-            //    Thread.Sleep(6000);
-            //}
-
-            var rand = new Random();
-
-            //for (int i = 0; (i < 100) && !m_closing; ++i)
-            //{
-            //    Thread.Sleep(500);
-            //    so.Sample = ((rand.Next() % 2) == 0) ? chanter : tenor;
-            //    so.DesiredFrequency = 60 + (rand.Next() % 1000);
-            //}
-
-            var minFrequency = 80.0f;
-            var maxFrequency = 1050.0f;
-            var numSteps = 12.0;
-            var numTestsPerStep = 4;
-            var mulStep = (float)Math.Pow(maxFrequency / minFrequency, 1.0f / (numSteps - 1));
-
-            var results = new Dictionary<string, List<TestResult>>();
+            var results = new List<TestResult>();
 
             foreach (var s in m_samples)
             {
-                results[s.Filename] = new List<TestResult>();
                 Console.WriteLine("Testing {0}", s.Filename);
-                //for (var frequency = minFrequency; frequency <= maxFrequency; frequency *= mulStep)
+
+                const int subSteps = 5;
+                const float topFrequencyMultiplier = 1.1f;
+                float frequencyStepMultiplier = (float)Math.Pow(topFrequencyMultiplier, 1.0f / ((subSteps - 1) / 2.0f));
+                var frequency = s.Frequency / ((float)Math.Pow(frequencyStepMultiplier, (subSteps - 1) / 2.0f));
+                
+                for (var i = 0; i < subSteps; ++i)
                 {
-                    var frequency = s.Frequency;
                     var result = TestPoint(m_soundOutput, s, frequency, numTestsPerStep);
-                    results[s.Filename].Add(result);
+                    results.Add(result);
                     Console.WriteLine("{0}: {1:0.00}% ({2})", frequency, result.PassRatio * 100.0f, string.Join(", ", result.Readings.Select(r => r.SignalFrequency)));
+
+                    frequency *= frequencyStepMultiplier;
                 }
             }
 
-            Console.WriteLine("Frequency, {0}", string.Join(", ", m_samples.Select(s => s.Filename)));
-            var anyListOfResults = results[m_samples[0].Filename];
-            for (var i = 0; i < anyListOfResults.Count; ++i)
+            Console.WriteLine("Frequency, Sample, PassRatio");
+
+            foreach (var tr in results)
             {
-                Console.WriteLine("{0}, {1}", anyListOfResults[i].Frequency, string.Join(", ", results.Select(kv => kv.Value[i].PassRatio)));
+                Console.WriteLine("{0}, {1}, {2}, {3}, {4}", tr.Frequency, tr.SampleName, tr.PassRatio, tr.RejectionRatio, tr.WrongOctaveFailReasonRatio);
             }
+
+            Console.WriteLine("Total Pass Ratio: {0:00.00}%", results.Average(tr => tr.PassRatio) * 100.0f);
+            Console.WriteLine("Total Rejection Ratio: {0:00.00}%", results.Average(tr => tr.RejectionRatio) * 100.0f);
+            Console.WriteLine("Total Error Octave Error Ratio: {0:00.00}%", results.Where(tr => tr.NumFailed > 0).Average(tr => tr.WrongOctaveFailReasonRatio) * 100.0f);
+
+            BeginInvoke((Action)(() => { btnTest.Enabled = true; }));
         }
 
         void WaitForRejectedReadings(int numReadings)
@@ -178,14 +195,29 @@ namespace TunerSimulator
             }
         }
 
-        bool IsReadingValid(float frequency, TunerReading tr)
-        {
-            var maxVariation = 0.1f;
-            var minFrequency = frequency * (1.0f / (1 + maxVariation));
-            var maxFrequency = frequency * (1 + maxVariation);
+        const float MAX_READING_ERROR_RATIO = 0.1f;
 
-            return ((tr.SignalFrequency >= minFrequency) && (tr.SignalFrequency <= maxFrequency))
-                || ((frequency >= tr.MinSignalFrequency) && (frequency <= tr.MaxSignalFrequency));
+        bool IsReadingFrequencyValid(float targetFrequency, float readingFrequency)
+        {
+            var minFrequency = targetFrequency * (1.0f / (1 + MAX_READING_ERROR_RATIO));
+            var maxFrequency = targetFrequency * (1 + MAX_READING_ERROR_RATIO);
+
+            return (readingFrequency >= minFrequency) && (readingFrequency <= maxFrequency);
+        }
+
+        bool IsReadingValid(float targetFrequency, TunerReading tr)
+        {
+            return IsReadingFrequencyValid(targetFrequency, tr.SignalFrequency)
+                || ((targetFrequency >= tr.MinSignalFrequency) && (targetFrequency <= tr.MaxSignalFrequency));
+        }
+
+        bool IsReadingOctaveError(float targetFrequency, TunerReading tr)
+        {
+            return IsReadingFrequencyValid(targetFrequency, tr.SignalFrequency * 2)
+                || IsReadingFrequencyValid(targetFrequency, tr.SignalFrequency * 3)
+                || IsReadingFrequencyValid(targetFrequency, tr.SignalFrequency * 4)
+                || IsReadingFrequencyValid(targetFrequency, tr.SignalFrequency * 5)
+                || IsReadingFrequencyValid(targetFrequency, tr.SignalFrequency * 6);
         }
 
         TestResult TestPoint(SoundOutput so, Sample sample, float frequency, int numReadings)
@@ -193,32 +225,36 @@ namespace TunerSimulator
             // Flush out the sound pipeline before starting the new test
             so.Sample = null;
 
-            WaitForRejectedReadings(2);
+            WaitForRejectedReadings(1);
 
             so.Sample = sample;
             so.DesiredFrequency = frequency;
 
             var result = new TestResult();
             result.Frequency = frequency;
+            result.SampleName = sample.Filename;
 
-            // Wait until our first non-rejected reading
-            for (;;)
-            {
-                if (DequeueTunerReading().SignalFrequency >= 0.0f)
-                {
-                    break;
-                }
-            }
-
-            for (; result.NumReadings < numReadings; )
+            var seenFirstValidReading = false;
+            for (; result.NumValidReadings < numReadings; )
             {
                 var tr = DequeueTunerReading();
+
+                // Wait until our first non-rejected reading
+                if (!seenFirstValidReading && (tr.SignalFrequency < 0.0f))
+                {
+                    //Console.WriteLine("(waiting until first valid reading to start sampling)");
+                    continue;
+                }
+
+                seenFirstValidReading = true;
+
                 result.Readings.Add(tr);
 
                 if (tr.SignalFrequency >= 0.0f)
                 {
-                    ++result.NumReadings;
+                    ++result.NumValidReadings;
                     var valid = IsReadingValid(frequency, tr);
+                    var octaveError = IsReadingOctaveError(frequency, tr);
 
                     if (valid)
                     {
@@ -227,13 +263,17 @@ namespace TunerSimulator
                     else
                     {
                         ++result.NumFailed;
+                        if (octaveError)
+                        {
+                            ++result.NumWrongOctaveReadings;
+                        }
                     }
 
-                    Console.WriteLine("Expected: {0} got: {1} {2} ({3} - {4})", frequency, tr.SignalFrequency, valid ? "" : "X", tr.MinSignalFrequency, tr.MaxSignalFrequency);
+                    Console.WriteLine("Expected: {0,7:F2} got: {1,7:F2}  {2,7:F2}  ({3} - {4})", frequency, tr.SignalFrequency, valid ? " " : (octaveError ? "O" : "X"), tr.MinSignalFrequency, tr.MaxSignalFrequency);
                 }
                 else
                 {
-                    ++result.NumRejected;
+                    ++result.NumRejectedReadings;
                     Console.WriteLine("(Rejected)");
                 }
             }
@@ -291,7 +331,6 @@ namespace TunerSimulator
             m_soundOutput = new SoundOutput();
             m_soundOutput.Start();
 
-            //m_audioTask = Task.Run(() => FullTunerTest());
             //m_serialTask = Task.Run(() => DumpSerial());
             m_serialTask = Task.Run(() => ReadTunerFrequencyFromSerial());
         }
@@ -325,6 +364,12 @@ namespace TunerSimulator
             {
                 while (spSerial.BytesToRead > 0)
                 {
+                    if (!m_initializedTuner)
+                    {
+                        BeginInvoke((Action)(() => { InitializeTuner(); }));
+                        m_initializedTuner = true;
+                    }
+
                     var c = (char)spSerial.ReadByte();
                     if (c != '\n')
                     {
@@ -435,7 +480,8 @@ namespace TunerSimulator
 
         private void btnTest_Click(object sender, EventArgs e)
         {
-            //@TODO
+            m_audioTask = Task.Run(() => FullTunerTest());
+            btnTest.Enabled = false;
         }
 
         private void btnStop_Click(object sender, EventArgs e)
@@ -476,7 +522,7 @@ namespace TunerSimulator
 
         private void cmbDumpMode_SelectedIndexChanged(object sender, EventArgs e)
         {
-            SerialSend(cmbDumpMode.SelectedIndex == 0 ? "b" : "g");
+            SerialSend($"d{cmbDumpMode.SelectedIndex}");
         }
     }
 }

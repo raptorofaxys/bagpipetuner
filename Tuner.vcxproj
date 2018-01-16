@@ -11,10 +11,10 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
-    <None Include="Tuner\Tuner.pde" />
+    <ClInclude Include="__vm\.Tuner.vsarduino.h" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="__vm\.Tuner.vsarduino.h" />
+    <None Include="Tuner\Tuner.ino" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{5062B0DB-87D8-4357-A151-8BDD8FB71D56}</ProjectGuid>
