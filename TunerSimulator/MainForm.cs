@@ -105,6 +105,8 @@ namespace TunerSimulator
         void InitializeTuner()
         {
             txtCorrelationDipPct.Text = 25.ToString();
+            tunerChannelControl1.SuspendChanges = true;
+            //tunerChannelControl1.txt
         }
 
         void EnqueueTunerReading(TunerReading tr)
@@ -348,6 +350,8 @@ namespace TunerSimulator
 
         private void ReadTunerFrequencyFromSerial()
         {
+            return;
+
             //var portNames = System.IO.Ports.SerialPort.GetPortNames();
             //foreach (var s in portNames)
             //{
@@ -523,6 +527,11 @@ namespace TunerSimulator
         private void cmbDumpMode_SelectedIndexChanged(object sender, EventArgs e)
         {
             SerialSend($"d{cmbDumpMode.SelectedIndex}");
+        }
+
+        private void tunerChannelControl_ConfigurationChanged()
+        {
+
         }
     }
 }
