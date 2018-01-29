@@ -105,8 +105,47 @@ namespace TunerSimulator
         void InitializeTuner()
         {
             txtCorrelationDipPct.Text = 25.ToString();
+            const float frequencyDeviation = 0.1f;
+
+            const int bassDroneFreq = 119;
             tunerChannelControl1.SuspendChanges = true;
-            //tunerChannelControl1.txt
+            tunerChannelControl1.MinFrequency.Value = (int)(bassDroneFreq * (1 - frequencyDeviation));
+            tunerChannelControl1.MaxFrequency.Value = (int)(bassDroneFreq * (1 + frequencyDeviation));
+            tunerChannelControl1.CorrelationDipPercent.Value = 25;
+            tunerChannelControl1.GcfStep.Value = 2;
+            tunerChannelControl1.BaseOffsetStep.Value = 4;
+            tunerChannelControl1.BaseOffsetStepIncrement.Value = 2;
+            tunerChannelControl1.SuspendChanges = false;
+
+            const int tenorDroneFreq = 239;
+            tunerChannelControl2.SuspendChanges = true;
+            tunerChannelControl2.MinFrequency.Value = (int)(tenorDroneFreq * (1 - frequencyDeviation));
+            tunerChannelControl2.MaxFrequency.Value = (int)(tenorDroneFreq * (1 + frequencyDeviation));
+            tunerChannelControl2.CorrelationDipPercent.Value = 25;
+            tunerChannelControl2.GcfStep.Value = 2;
+            tunerChannelControl2.BaseOffsetStep.Value = 4;
+            tunerChannelControl2.BaseOffsetStepIncrement.Value = 2;
+            tunerChannelControl2.SuspendChanges = false;
+
+            tunerChannelControl3.SuspendChanges = true;
+            tunerChannelControl3.MinFrequency.Value = (int)(tenorDroneFreq * (1 - frequencyDeviation));
+            tunerChannelControl3.MaxFrequency.Value = (int)(tenorDroneFreq * (1 + frequencyDeviation));
+            tunerChannelControl3.CorrelationDipPercent.Value = 25;
+            tunerChannelControl3.GcfStep.Value = 2;
+            tunerChannelControl3.BaseOffsetStep.Value = 4;
+            tunerChannelControl3.BaseOffsetStepIncrement.Value = 2;
+            tunerChannelControl3.SuspendChanges = false;
+
+            const int chanterMinFreq = 420;
+            const int chanterMaxFreq = 943;
+            tunerChannelControl4.SuspendChanges = true;
+            tunerChannelControl4.MinFrequency.Value = (int)(chanterMinFreq * (1 - frequencyDeviation));
+            tunerChannelControl4.MaxFrequency.Value = (int)(chanterMaxFreq * (1 + frequencyDeviation));
+            tunerChannelControl4.CorrelationDipPercent.Value = 25;
+            tunerChannelControl4.GcfStep.Value = 2;
+            tunerChannelControl4.BaseOffsetStep.Value = 4;
+            tunerChannelControl4.BaseOffsetStepIncrement.Value = 2;
+            tunerChannelControl4.SuspendChanges = false;
         }
 
         void EnqueueTunerReading(TunerReading tr)
@@ -350,7 +389,12 @@ namespace TunerSimulator
 
         private void ReadTunerFrequencyFromSerial()
         {
-            return;
+            const bool disableSerial = true;
+            if (disableSerial)
+            {
+                BeginInvoke((Action)(() => { InitializeTuner(); }));
+                return;
+            }
 
             //var portNames = System.IO.Ports.SerialPort.GetPortNames();
             //foreach (var s in portNames)
@@ -529,9 +573,16 @@ namespace TunerSimulator
             SerialSend($"d{cmbDumpMode.SelectedIndex}");
         }
 
-        private void tunerChannelControl_ConfigurationChanged()
+        private void tunerChannelControl_ConfigurationChanged(object sender, EventArgs e)
         {
-
+            var ctl = (TunerChannelControl)sender;
+            SerialSend($"c{ctl.ChannelIndex}");
+            SerialSend($"m{ctl.MinFrequency}");
+            SerialSend($"M{ctl.MaxFrequency}");
+            SerialSend($"p{ctl.CorrelationDipPercent}");
+            SerialSend($"g{ctl.GcfStep}");
+            SerialSend($"o{ctl.BaseOffsetStep}");
+            SerialSend($"s{ctl.BaseOffsetStepIncrement}");
         }
     }
 }

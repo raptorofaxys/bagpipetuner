@@ -28,62 +28,68 @@
         /// </summary>
         private void InitializeComponent()
         {
-            this.txtCorrelationDipPercent = new System.Windows.Forms.TextBox();
-            this.txtGcfStep = new System.Windows.Forms.TextBox();
-            this.txtBaseOffsetStep = new System.Windows.Forms.TextBox();
-            this.txtBaseOffsetStepIncrement = new System.Windows.Forms.TextBox();
-            this.txtMaxFrequency = new System.Windows.Forms.TextBox();
-            this.txtMinFrequency = new System.Windows.Forms.TextBox();
+            this.CorrelationDipPercent = new TunerSimulator.IntegerTextBox();
+            this.GcfStep = new TunerSimulator.IntegerTextBox();
+            this.BaseOffsetStep = new TunerSimulator.IntegerTextBox();
+            this.BaseOffsetStepIncrement = new TunerSimulator.IntegerTextBox();
+            this.MaxFrequency = new TunerSimulator.IntegerTextBox();
+            this.MinFrequency = new TunerSimulator.IntegerTextBox();
             this.lblChannelName = new System.Windows.Forms.Label();
             this.SuspendLayout();
             // 
-            // txtCorrelationDipPercent
+            // CorrelationDipPercent
             // 
-            this.txtCorrelationDipPercent.Location = new System.Drawing.Point(300, 2);
-            this.txtCorrelationDipPercent.Name = "txtCorrelationDipPercent";
-            this.txtCorrelationDipPercent.Size = new System.Drawing.Size(100, 35);
-            this.txtCorrelationDipPercent.TabIndex = 0;
-            this.txtCorrelationDipPercent.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
+            this.CorrelationDipPercent.Location = new System.Drawing.Point(300, 2);
+            this.CorrelationDipPercent.Name = "CorrelationDipPercent";
+            this.CorrelationDipPercent.Size = new System.Drawing.Size(100, 35);
+            this.CorrelationDipPercent.TabIndex = 0;
+            this.CorrelationDipPercent.Value = 0;
+            this.CorrelationDipPercent.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
             // 
-            // txtGcfStep
+            // GcfStep
             // 
-            this.txtGcfStep.Location = new System.Drawing.Point(406, 2);
-            this.txtGcfStep.Name = "txtGcfStep";
-            this.txtGcfStep.Size = new System.Drawing.Size(100, 35);
-            this.txtGcfStep.TabIndex = 1;
-            this.txtGcfStep.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
+            this.GcfStep.Location = new System.Drawing.Point(406, 2);
+            this.GcfStep.Name = "GcfStep";
+            this.GcfStep.Size = new System.Drawing.Size(100, 35);
+            this.GcfStep.TabIndex = 1;
+            this.GcfStep.Value = 0;
+            this.GcfStep.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
             // 
-            // txtBaseOffsetStep
+            // BaseOffsetStep
             // 
-            this.txtBaseOffsetStep.Location = new System.Drawing.Point(512, 2);
-            this.txtBaseOffsetStep.Name = "txtBaseOffsetStep";
-            this.txtBaseOffsetStep.Size = new System.Drawing.Size(100, 35);
-            this.txtBaseOffsetStep.TabIndex = 2;
-            this.txtBaseOffsetStep.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
+            this.BaseOffsetStep.Location = new System.Drawing.Point(512, 2);
+            this.BaseOffsetStep.Name = "BaseOffsetStep";
+            this.BaseOffsetStep.Size = new System.Drawing.Size(100, 35);
+            this.BaseOffsetStep.TabIndex = 2;
+            this.BaseOffsetStep.Value = 0;
+            this.BaseOffsetStep.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
             // 
-            // txtBaseOffsetStepIncrement
+            // BaseOffsetStepIncrement
             // 
-            this.txtBaseOffsetStepIncrement.Location = new System.Drawing.Point(619, 2);
-            this.txtBaseOffsetStepIncrement.Name = "txtBaseOffsetStepIncrement";
-            this.txtBaseOffsetStepIncrement.Size = new System.Drawing.Size(100, 35);
-            this.txtBaseOffsetStepIncrement.TabIndex = 3;
-            this.txtBaseOffsetStepIncrement.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
+            this.BaseOffsetStepIncrement.Location = new System.Drawing.Point(619, 2);
+            this.BaseOffsetStepIncrement.Name = "BaseOffsetStepIncrement";
+            this.BaseOffsetStepIncrement.Size = new System.Drawing.Size(100, 35);
+            this.BaseOffsetStepIncrement.TabIndex = 3;
+            this.BaseOffsetStepIncrement.Value = 0;
+            this.BaseOffsetStepIncrement.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
             // 
-            // txtMaxFrequency
+            // MaxFrequency
             // 
-            this.txtMaxFrequency.Location = new System.Drawing.Point(194, 2);
-            this.txtMaxFrequency.Name = "txtMaxFrequency";
-            this.txtMaxFrequency.Size = new System.Drawing.Size(100, 35);
-            this.txtMaxFrequency.TabIndex = 4;
-            this.txtMaxFrequency.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
+            this.MaxFrequency.Location = new System.Drawing.Point(194, 2);
+            this.MaxFrequency.Name = "MaxFrequency";
+            this.MaxFrequency.Size = new System.Drawing.Size(100, 35);
+            this.MaxFrequency.TabIndex = 4;
+            this.MaxFrequency.Value = 0;
+            this.MaxFrequency.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
             // 
-            // txtMinFrequency
+            // MinFrequency
             // 
-            this.txtMinFrequency.Location = new System.Drawing.Point(88, 3);
-            this.txtMinFrequency.Name = "txtMinFrequency";
-            this.txtMinFrequency.Size = new System.Drawing.Size(100, 35);
-            this.txtMinFrequency.TabIndex = 5;
-            this.txtMinFrequency.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
+            this.MinFrequency.Location = new System.Drawing.Point(88, 3);
+            this.MinFrequency.Name = "MinFrequency";
+            this.MinFrequency.Size = new System.Drawing.Size(100, 35);
+            this.MinFrequency.TabIndex = 5;
+            this.MinFrequency.Value = 0;
+            this.MinFrequency.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
             // 
             // lblChannelName
             // 
@@ -99,14 +105,15 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(14F, 29F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.Controls.Add(this.lblChannelName);
-            this.Controls.Add(this.txtMinFrequency);
-            this.Controls.Add(this.txtMaxFrequency);
-            this.Controls.Add(this.txtBaseOffsetStepIncrement);
-            this.Controls.Add(this.txtBaseOffsetStep);
-            this.Controls.Add(this.txtGcfStep);
-            this.Controls.Add(this.txtCorrelationDipPercent);
+            this.Controls.Add(this.MinFrequency);
+            this.Controls.Add(this.MaxFrequency);
+            this.Controls.Add(this.BaseOffsetStepIncrement);
+            this.Controls.Add(this.BaseOffsetStep);
+            this.Controls.Add(this.GcfStep);
+            this.Controls.Add(this.CorrelationDipPercent);
             this.Name = "TunerChannelControl";
             this.Size = new System.Drawing.Size(723, 40);
+            this.Load += new System.EventHandler(this.TunerChannelControl_Load);
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -114,12 +121,12 @@
 
         #endregion
 
-        private System.Windows.Forms.TextBox txtCorrelationDipPercent;
-        private System.Windows.Forms.TextBox txtGcfStep;
-        private System.Windows.Forms.TextBox txtBaseOffsetStep;
-        private System.Windows.Forms.TextBox txtBaseOffsetStepIncrement;
-        private System.Windows.Forms.TextBox txtMaxFrequency;
-        private System.Windows.Forms.TextBox txtMinFrequency;
+        public TunerSimulator.IntegerTextBox CorrelationDipPercent;
+        public TunerSimulator.IntegerTextBox GcfStep;
+        public TunerSimulator.IntegerTextBox BaseOffsetStep;
+        public TunerSimulator.IntegerTextBox BaseOffsetStepIncrement;
+        public TunerSimulator.IntegerTextBox MaxFrequency;
+        public TunerSimulator.IntegerTextBox MinFrequency;
         private System.Windows.Forms.Label lblChannelName;
     }
 }

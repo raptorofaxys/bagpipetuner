@@ -12,8 +12,9 @@ namespace TunerSimulator
 {
     public partial class TunerChannelControl : UserControl
     {
-        public delegate void ConfigurationChangedDelegate();
-        public event ConfigurationChangedDelegate ConfigurationChanged;
+        //public delegate void ConfigurationChangedDelegate();
+        public event EventHandler ConfigurationChanged;
+        public int ChannelIndex { get; set; }
 
         private bool m_changesSuspended = false;
         public bool SuspendChanges
@@ -36,12 +37,12 @@ namespace TunerSimulator
         {
             get
             {
-                return lblChannelName.Text;
+                return $"CH{ChannelIndex + 1}";
             }
-            set
-            {
-                lblChannelName.Text = value;
-            }
+            //set
+            //{
+            //    lblChannelName.Text = value;
+            //}
         }
 
         public TunerChannelControl()
@@ -59,8 +60,13 @@ namespace TunerSimulator
             var evt = ConfigurationChanged;
             if (evt != null)
             {
-                evt();
+                evt(this, null);
             }
+        }
+
+        private void TunerChannelControl_Load(object sender, EventArgs e)
+        {
+            lblChannelName.Text = ChannelName;
         }
     }
 }

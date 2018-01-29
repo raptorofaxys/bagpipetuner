@@ -42,16 +42,16 @@
             this.lblMinDumpFrequency = new System.Windows.Forms.Label();
             this.txtMinDumpFrequency = new System.Windows.Forms.TextBox();
             this.chkDumpOnNull = new System.Windows.Forms.CheckBox();
-            this.tunerChannelControl1 = new TunerSimulator.TunerChannelControl();
-            this.tunerChannelControl2 = new TunerSimulator.TunerChannelControl();
-            this.tunerChannelControl3 = new TunerSimulator.TunerChannelControl();
-            this.tunerChannelControl4 = new TunerSimulator.TunerChannelControl();
             this.lblMinF = new System.Windows.Forms.Label();
             this.lblMaxF = new System.Windows.Forms.Label();
             this.lblCDP = new System.Windows.Forms.Label();
             this.lblGcfs = new System.Windows.Forms.Label();
             this.lblBos = new System.Windows.Forms.Label();
             this.lblBosi = new System.Windows.Forms.Label();
+            this.tunerChannelControl4 = new TunerSimulator.TunerChannelControl();
+            this.tunerChannelControl3 = new TunerSimulator.TunerChannelControl();
+            this.tunerChannelControl2 = new TunerSimulator.TunerChannelControl();
+            this.tunerChannelControl1 = new TunerSimulator.TunerChannelControl();
             this.gbDumping.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -76,16 +76,15 @@
             this.pnlSamples.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left)));
             this.pnlSamples.Location = new System.Drawing.Point(35, 74);
-            this.pnlSamples.Margin = new System.Windows.Forms.Padding(7, 7, 7, 7);
+            this.pnlSamples.Margin = new System.Windows.Forms.Padding(7);
             this.pnlSamples.Name = "pnlSamples";
             this.pnlSamples.Size = new System.Drawing.Size(1150, 948);
             this.pnlSamples.TabIndex = 1;
             // 
             // btnTest
             // 
-            this.btnTest.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Bottom | System.Windows.Forms.AnchorStyles.Left)));
             this.btnTest.Location = new System.Drawing.Point(1213, 964);
-            this.btnTest.Margin = new System.Windows.Forms.Padding(7, 7, 7, 7);
+            this.btnTest.Margin = new System.Windows.Forms.Padding(7);
             this.btnTest.Name = "btnTest";
             this.btnTest.Size = new System.Drawing.Size(175, 51);
             this.btnTest.TabIndex = 2;
@@ -96,7 +95,7 @@
             // btnStop
             // 
             this.btnStop.Location = new System.Drawing.Point(1199, 74);
-            this.btnStop.Margin = new System.Windows.Forms.Padding(7, 7, 7, 7);
+            this.btnStop.Margin = new System.Windows.Forms.Padding(7);
             this.btnStop.Name = "btnStop";
             this.btnStop.Size = new System.Drawing.Size(175, 51);
             this.btnStop.TabIndex = 2;
@@ -117,7 +116,7 @@
             // txtCorrelationDipPct
             // 
             this.txtCorrelationDipPct.Location = new System.Drawing.Point(1430, 141);
-            this.txtCorrelationDipPct.Margin = new System.Windows.Forms.Padding(7, 7, 7, 7);
+            this.txtCorrelationDipPct.Margin = new System.Windows.Forms.Padding(7);
             this.txtCorrelationDipPct.Name = "txtCorrelationDipPct";
             this.txtCorrelationDipPct.Size = new System.Drawing.Size(184, 35);
             this.txtCorrelationDipPct.TabIndex = 7;
@@ -190,42 +189,6 @@
             this.chkDumpOnNull.Text = "Dump on null reading";
             this.chkDumpOnNull.UseVisualStyleBackColor = true;
             // 
-            // tunerChannelControl1
-            // 
-            this.tunerChannelControl1.ChannelName = "CH1";
-            this.tunerChannelControl1.Location = new System.Drawing.Point(1199, 306);
-            this.tunerChannelControl1.Name = "tunerChannelControl1";
-            this.tunerChannelControl1.Size = new System.Drawing.Size(740, 42);
-            this.tunerChannelControl1.TabIndex = 12;
-            this.tunerChannelControl1.ConfigurationChanged += new TunerSimulator.TunerChannelControl.ConfigurationChangedDelegate(this.tunerChannelControl_ConfigurationChanged);
-            // 
-            // tunerChannelControl2
-            // 
-            this.tunerChannelControl2.ChannelName = "CH2";
-            this.tunerChannelControl2.Location = new System.Drawing.Point(1199, 354);
-            this.tunerChannelControl2.Name = "tunerChannelControl2";
-            this.tunerChannelControl2.Size = new System.Drawing.Size(740, 42);
-            this.tunerChannelControl2.TabIndex = 13;
-            this.tunerChannelControl2.ConfigurationChanged += new TunerSimulator.TunerChannelControl.ConfigurationChangedDelegate(this.tunerChannelControl_ConfigurationChanged);
-            // 
-            // tunerChannelControl3
-            // 
-            this.tunerChannelControl3.ChannelName = "CH3";
-            this.tunerChannelControl3.Location = new System.Drawing.Point(1199, 402);
-            this.tunerChannelControl3.Name = "tunerChannelControl3";
-            this.tunerChannelControl3.Size = new System.Drawing.Size(740, 42);
-            this.tunerChannelControl3.TabIndex = 14;
-            this.tunerChannelControl3.ConfigurationChanged += new TunerSimulator.TunerChannelControl.ConfigurationChangedDelegate(this.tunerChannelControl_ConfigurationChanged);
-            // 
-            // tunerChannelControl4
-            // 
-            this.tunerChannelControl4.ChannelName = "CH4";
-            this.tunerChannelControl4.Location = new System.Drawing.Point(1199, 450);
-            this.tunerChannelControl4.Name = "tunerChannelControl4";
-            this.tunerChannelControl4.Size = new System.Drawing.Size(740, 42);
-            this.tunerChannelControl4.TabIndex = 15;
-            this.tunerChannelControl4.ConfigurationChanged += new TunerSimulator.TunerChannelControl.ConfigurationChangedDelegate(this.tunerChannelControl_ConfigurationChanged);
-            // 
             // lblMinF
             // 
             this.lblMinF.AutoSize = true;
@@ -280,6 +243,46 @@
             this.lblBosi.TabIndex = 21;
             this.lblBosi.Text = "BOSI";
             // 
+            // tunerChannelControl4
+            // 
+            this.tunerChannelControl4.ChannelIndex = 3;
+            this.tunerChannelControl4.Location = new System.Drawing.Point(1199, 450);
+            this.tunerChannelControl4.Name = "tunerChannelControl4";
+            this.tunerChannelControl4.Size = new System.Drawing.Size(740, 42);
+            this.tunerChannelControl4.SuspendChanges = false;
+            this.tunerChannelControl4.TabIndex = 15;
+            this.tunerChannelControl4.ConfigurationChanged += new System.EventHandler(this.tunerChannelControl_ConfigurationChanged);
+            // 
+            // tunerChannelControl3
+            // 
+            this.tunerChannelControl3.ChannelIndex = 2;
+            this.tunerChannelControl3.Location = new System.Drawing.Point(1199, 402);
+            this.tunerChannelControl3.Name = "tunerChannelControl3";
+            this.tunerChannelControl3.Size = new System.Drawing.Size(740, 42);
+            this.tunerChannelControl3.SuspendChanges = false;
+            this.tunerChannelControl3.TabIndex = 14;
+            this.tunerChannelControl3.ConfigurationChanged += new System.EventHandler(this.tunerChannelControl_ConfigurationChanged);
+            // 
+            // tunerChannelControl2
+            // 
+            this.tunerChannelControl2.ChannelIndex = 1;
+            this.tunerChannelControl2.Location = new System.Drawing.Point(1199, 354);
+            this.tunerChannelControl2.Name = "tunerChannelControl2";
+            this.tunerChannelControl2.Size = new System.Drawing.Size(740, 42);
+            this.tunerChannelControl2.SuspendChanges = false;
+            this.tunerChannelControl2.TabIndex = 13;
+            this.tunerChannelControl2.ConfigurationChanged += new System.EventHandler(this.tunerChannelControl_ConfigurationChanged);
+            // 
+            // tunerChannelControl1
+            // 
+            this.tunerChannelControl1.ChannelIndex = 0;
+            this.tunerChannelControl1.Location = new System.Drawing.Point(1199, 306);
+            this.tunerChannelControl1.Name = "tunerChannelControl1";
+            this.tunerChannelControl1.Size = new System.Drawing.Size(740, 42);
+            this.tunerChannelControl1.SuspendChanges = false;
+            this.tunerChannelControl1.TabIndex = 12;
+            this.tunerChannelControl1.ConfigurationChanged += new System.EventHandler(this.tunerChannelControl_ConfigurationChanged);
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(14F, 29F);
@@ -302,7 +305,7 @@
             this.Controls.Add(this.btnTest);
             this.Controls.Add(this.pnlSamples);
             this.Controls.Add(this.lblReading);
-            this.Margin = new System.Windows.Forms.Padding(7, 7, 7, 7);
+            this.Margin = new System.Windows.Forms.Padding(7);
             this.Name = "MainForm";
             this.Text = "Kiwi Tuner Test Harness";
             this.FormClosed += new System.Windows.Forms.FormClosedEventHandler(this.MainForm_FormClosed);
