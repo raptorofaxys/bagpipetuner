@@ -185,9 +185,9 @@ namespace TunerSimulator
             m_spinnerIndex = (m_spinnerIndex + 1) % SPINNER.Length;
         }
 
-        void FullTunerTest()
+        void RunTunerTest(int testsPerPoint = 16, int substepsPerSample = 5)
         {
-            var numTestsPerStep = 16;
+            //var numTestsPerStep = 16;
 
             var results = new List<TestResult>();
 
@@ -195,14 +195,14 @@ namespace TunerSimulator
             {
                 Console.WriteLine("Testing {0}", s.Filename);
 
-                const int subSteps = 5;
+                //const int subSteps = 5;
                 const float topFrequencyMultiplier = 1.1f;
-                float frequencyStepMultiplier = (float)Math.Pow(topFrequencyMultiplier, 1.0f / ((subSteps - 1) / 2.0f));
-                var frequency = s.Frequency / ((float)Math.Pow(frequencyStepMultiplier, (subSteps - 1) / 2.0f));
-                
-                for (var i = 0; i < subSteps; ++i)
+                float frequencyStepMultiplier = (float)Math.Pow(topFrequencyMultiplier, 1.0f / ((substepsPerSample - 1) / 2.0f));
+                var frequency = s.Frequency / ((float)Math.Pow(frequencyStepMultiplier, (substepsPerSample - 1) / 2.0f));
+
+                for (var i = 0; i < substepsPerSample; ++i)
                 {
-                    var result = TestPoint(m_soundOutput, s, frequency, numTestsPerStep);
+                    var result = TestPoint(m_soundOutput, s, frequency, testsPerPoint);
                     results.Add(result);
                     Console.WriteLine("{0}: {1:0.00}% ({2})", frequency, result.PassRatio * 100.0f, string.Join(", ", result.Readings.Select(r => r.SignalFrequency)));
 
@@ -221,7 +221,8 @@ namespace TunerSimulator
             Console.WriteLine("Total Rejection Ratio: {0:00.00}%", results.Average(tr => tr.RejectionRatio) * 100.0f);
             Console.WriteLine("Total Error Octave Error Ratio: {0:00.00}%", results.Where(tr => tr.NumFailed > 0).Average(tr => tr.WrongOctaveFailReasonRatio) * 100.0f);
 
-            BeginInvoke((Action)(() => { btnTest.Enabled = true; }));
+            //BeginInvoke((Action)(() => { btnFullTest.Enabled = true; }));
+            BeginInvoke((Action)(() => OnTestCompleted()));
         }
 
         void WaitForRejectedReadings(int numReadings)
@@ -276,7 +277,7 @@ namespace TunerSimulator
             result.SampleName = sample.Filename;
 
             var seenFirstValidReading = false;
-            for (; result.NumValidReadings < numReadings; )
+            for (; result.NumValidReadings < numReadings;)
             {
                 var tr = DequeueTunerReading();
 
@@ -361,7 +362,7 @@ namespace TunerSimulator
                     b.Top = y;
                     b.Width = 50;
                     b.Text = i.ToString();
-                    b.Tag = new SamplePlayback { Sample = s, Frequency = s.Frequency * (float)Math.Pow(offsetFrequencyScale, i)};
+                    b.Tag = new SamplePlayback { Sample = s, Frequency = s.Frequency * (float)Math.Pow(offsetFrequencyScale, i) };
                     b.Click += SampleButtonClicked;
                     pnlSamples.Controls.Add(b);
                     x += b.Width;
@@ -497,7 +498,7 @@ namespace TunerSimulator
         {
             spSerial.Handshake = System.IO.Ports.Handshake.None;
             spSerial.Open();
-            for (; !m_closing ;)
+            for (; !m_closing;)
             {
                 while (spSerial.BytesToRead > 0)
                 {
@@ -526,10 +527,27 @@ namespace TunerSimulator
             UpdateAutoDumpFrequency();
         }
 
-        private void btnTest_Click(object sender, EventArgs e)
+        private void LaunchTest(Action test)
         {
-            m_audioTask = Task.Run(() => FullTunerTest());
-            btnTest.Enabled = false;
+            m_audioTask = Task.Run(test);
+            btnFullTest.Enabled = false;
+            btnQuickTest.Enabled = false;
+        }
+
+        private void OnTestCompleted()
+        {
+            btnFullTest.Enabled = true;
+            btnQuickTest.Enabled = true;
+        }
+
+        private void btnFullTest_Click(object sender, EventArgs e)
+        {
+            LaunchTest(() => RunTunerTest());
+        }
+
+        private void btnQuickTest_Click(object sender, EventArgs e)
+        {
+            LaunchTest(() => RunTunerTest(4, 1));
         }
 
         private void btnStop_Click(object sender, EventArgs e)

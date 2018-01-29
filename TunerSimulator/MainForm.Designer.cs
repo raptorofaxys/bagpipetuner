@@ -32,7 +32,7 @@
             this.spSerial = new System.IO.Ports.SerialPort(this.components);
             this.lblReading = new System.Windows.Forms.Label();
             this.pnlSamples = new System.Windows.Forms.Panel();
-            this.btnTest = new System.Windows.Forms.Button();
+            this.btnFullTest = new System.Windows.Forms.Button();
             this.btnStop = new System.Windows.Forms.Button();
             this.lblCorrelationDipPct = new System.Windows.Forms.Label();
             this.txtCorrelationDipPct = new System.Windows.Forms.TextBox();
@@ -52,6 +52,7 @@
             this.tunerChannelControl3 = new TunerSimulator.TunerChannelControl();
             this.tunerChannelControl2 = new TunerSimulator.TunerChannelControl();
             this.tunerChannelControl1 = new TunerSimulator.TunerChannelControl();
+            this.btnQuickTest = new System.Windows.Forms.Button();
             this.gbDumping.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -81,16 +82,16 @@
             this.pnlSamples.Size = new System.Drawing.Size(1150, 948);
             this.pnlSamples.TabIndex = 1;
             // 
-            // btnTest
+            // btnFullTest
             // 
-            this.btnTest.Location = new System.Drawing.Point(1213, 964);
-            this.btnTest.Margin = new System.Windows.Forms.Padding(7);
-            this.btnTest.Name = "btnTest";
-            this.btnTest.Size = new System.Drawing.Size(175, 51);
-            this.btnTest.TabIndex = 2;
-            this.btnTest.Text = "Full Test";
-            this.btnTest.UseVisualStyleBackColor = true;
-            this.btnTest.Click += new System.EventHandler(this.btnTest_Click);
+            this.btnFullTest.Location = new System.Drawing.Point(1213, 964);
+            this.btnFullTest.Margin = new System.Windows.Forms.Padding(7);
+            this.btnFullTest.Name = "btnFullTest";
+            this.btnFullTest.Size = new System.Drawing.Size(175, 51);
+            this.btnFullTest.TabIndex = 2;
+            this.btnFullTest.Text = "Full Test";
+            this.btnFullTest.UseVisualStyleBackColor = true;
+            this.btnFullTest.Click += new System.EventHandler(this.btnFullTest_Click);
             // 
             // btnStop
             // 
@@ -283,11 +284,23 @@
             this.tunerChannelControl1.TabIndex = 12;
             this.tunerChannelControl1.ConfigurationChanged += new System.EventHandler(this.tunerChannelControl_ConfigurationChanged);
             // 
+            // btnQuickTest
+            // 
+            this.btnQuickTest.Location = new System.Drawing.Point(1402, 964);
+            this.btnQuickTest.Margin = new System.Windows.Forms.Padding(7);
+            this.btnQuickTest.Name = "btnQuickTest";
+            this.btnQuickTest.Size = new System.Drawing.Size(175, 51);
+            this.btnQuickTest.TabIndex = 22;
+            this.btnQuickTest.Text = "Quick Test";
+            this.btnQuickTest.UseVisualStyleBackColor = true;
+            this.btnQuickTest.Click += new System.EventHandler(this.btnQuickTest_Click);
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(14F, 29F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(1994, 1048);
+            this.Controls.Add(this.btnQuickTest);
             this.Controls.Add(this.lblBosi);
             this.Controls.Add(this.lblBos);
             this.Controls.Add(this.lblGcfs);
@@ -302,7 +315,7 @@
             this.Controls.Add(this.lblCorrelationDipPct);
             this.Controls.Add(this.txtCorrelationDipPct);
             this.Controls.Add(this.btnStop);
-            this.Controls.Add(this.btnTest);
+            this.Controls.Add(this.btnFullTest);
             this.Controls.Add(this.pnlSamples);
             this.Controls.Add(this.lblReading);
             this.Margin = new System.Windows.Forms.Padding(7);
@@ -322,7 +335,7 @@
         private System.IO.Ports.SerialPort spSerial;
         private System.Windows.Forms.Label lblReading;
         private System.Windows.Forms.Panel pnlSamples;
-        private System.Windows.Forms.Button btnTest;
+        private System.Windows.Forms.Button btnFullTest;
         private System.Windows.Forms.Button btnStop;
         private System.Windows.Forms.Label lblCorrelationDipPct;
         private System.Windows.Forms.TextBox txtCorrelationDipPct;
@@ -342,5 +355,6 @@
         private System.Windows.Forms.Label lblGcfs;
         private System.Windows.Forms.Label lblBos;
         private System.Windows.Forms.Label lblBosi;
+        private System.Windows.Forms.Button btnQuickTest;
     }
 }
