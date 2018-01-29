@@ -1139,13 +1139,13 @@ public:
 			return result;
 		}
 
-		int m_gcfStep;
+		int m_minFrequency;
+		int m_maxFrequency;
 		int m_correlationDipThresholdPercent;
+		int m_gcfStep;
 		int m_baseOffsetStep;
 		int m_baseOffsetStepIncrement;
 
-		int m_minFrequency;
-		int m_maxFrequency;
 	private:
 		int m_audioPin;
 	};
@@ -1629,8 +1629,10 @@ public:
                     case 'I': g_dumpOnNullReading = true; break;
                     case 'i': g_dumpOnNullReading = false; break;
                     case 'f': g_dumpBelowFrequency = Serial.parseFloat(); break;
-					case 'c': activeChannelIndex = Serial.parseInt(); break; // @PCHANGE
-					case 'p': m_channels[activeChannelIndex].m_correlationDipThresholdPercent = Serial.parseInt(); break;// @PCHANGE
+					case 'c': activeChannelIndex = Serial.parseInt(); break;
+					case 'm': m_channels[activeChannelIndex].m_minFrequency = Serial.parseInt(); break;
+					case 'M': m_channels[activeChannelIndex].m_maxFrequency = Serial.parseInt(); break;
+					case 'p': m_channels[activeChannelIndex].m_correlationDipThresholdPercent = Serial.parseInt(); break;
 					case 'g': m_channels[activeChannelIndex].m_gcfStep = max(Serial.parseInt(), 1); break;// @PCHANGE
 					case 'o': m_channels[activeChannelIndex].m_baseOffsetStep = max(Serial.parseInt(), 1); break;// @PCHANGE
 					case 's': m_channels[activeChannelIndex].m_baseOffsetStepIncrement = Serial.parseInt(); break;// @PCHANGE
