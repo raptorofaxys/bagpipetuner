@@ -390,8 +390,8 @@ namespace TunerSimulator
 
         private void ReadTunerFrequencyFromSerial()
         {
-            const bool disableSerial = true;
-            if (disableSerial)
+            const bool serialEnabled = true;
+            if (!serialEnabled)
             {
                 BeginInvoke((Action)(() => { InitializeTuner(); }));
                 return;

@@ -60,7 +60,7 @@
             // 
             this.spSerial.BaudRate = 115200;
             this.spSerial.DtrEnable = true;
-            this.spSerial.PortName = "COM14";
+            this.spSerial.PortName = "COM5";
             // 
             // lblReading
             // 
