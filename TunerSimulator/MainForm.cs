@@ -13,6 +13,8 @@ namespace TunerSimulator
 {
     public partial class MainForm : Form
     {
+        bool m_serialEnabled = false;
+
         bool m_closing = false;
         Task m_audioTask;
         Task m_serialTask;
@@ -20,6 +22,9 @@ namespace TunerSimulator
         Sample[] m_samples;
         SoundOutput m_soundOutput;
         SamplePlayback m_samplePlayback;
+
+        SoundOutput[] m_bagpipeOutputs;
+        Sample[] m_chanterNotes;
 
         object m_frequencyReadingQueueLock = new object();
         object m_serialSendBufferLock = new object();
@@ -340,12 +345,54 @@ namespace TunerSimulator
             return result;
         }
 
+        private void StartDrones()
+        {
+            m_bagpipeOutputs = new SoundOutput[4];
+
+            m_bagpipeOutputs[0] = new SoundOutput();
+            m_bagpipeOutputs[0].Sample = m_samples[0];
+            m_bagpipeOutputs[0].DesiredFrequency = m_samples[0].Frequency;
+            m_bagpipeOutputs[0].RandomizePosition();
+            m_bagpipeOutputs[0].Start();
+
+            m_bagpipeOutputs[1] = new SoundOutput();
+            m_bagpipeOutputs[1].Sample = m_samples[1];
+            m_bagpipeOutputs[1].DesiredFrequency = m_samples[1].Frequency;
+            m_bagpipeOutputs[1].RandomizePosition();
+            m_bagpipeOutputs[1].Start();
+
+            m_bagpipeOutputs[2] = new SoundOutput();
+            m_bagpipeOutputs[2].Sample = m_samples[1];
+            m_bagpipeOutputs[2].DesiredFrequency = m_samples[1].Frequency + 1;
+            m_bagpipeOutputs[2].RandomizePosition();
+            m_bagpipeOutputs[2].Start();
+
+            m_bagpipeOutputs[3] = new SoundOutput();
+            m_bagpipeOutputs[3].Sample = m_chanterNotes[5];
+            m_bagpipeOutputs[3].DesiredFrequency = m_chanterNotes[5].Frequency;
+            m_bagpipeOutputs[3].RandomizePosition();
+            m_bagpipeOutputs[3].Start();
+        }
+
         private void MainForm_Load(object sender, EventArgs e)
         {
             m_samples = new Sample[]
             {
                 new Sample("Base Drone 119.raw", 119),
                 new Sample("Tenor drone 239.raw", 239),
+                new Sample("Chanter LowG 420.raw", 420),
+                new Sample("Chanter LowA 477.raw", 477),
+                new Sample("Chanter B 536.raw", 536),
+                new Sample("Chanter C 594.raw", 594),
+                new Sample("Chanter D 627.raw", 627),
+                new Sample("Chanter E 716.raw", 716),
+                new Sample("Chanter F 805.raw", 805),
+                new Sample("Chanter HighG 815.raw", 815),
+                new Sample("Chanter HighA 943.raw", 943),
+            };
+
+            m_chanterNotes = new Sample[]
+            {
                 new Sample("Chanter LowG 420.raw", 420),
                 new Sample("Chanter LowA 477.raw", 477),
                 new Sample("Chanter B 536.raw", 536),
@@ -389,6 +436,8 @@ namespace TunerSimulator
             m_soundOutput = new SoundOutput();
             m_soundOutput.Start();
 
+            StartDrones();
+
             //m_serialTask = Task.Run(() => DumpSerial());
             m_serialTask = Task.Run(() => ReadTunerFrequencyFromSerial());
         }
@@ -406,8 +455,7 @@ namespace TunerSimulator
 
         private void ReadTunerFrequencyFromSerial()
         {
-            const bool serialEnabled = true;
-            if (!serialEnabled)
+            if (!m_serialEnabled)
             {
                 BeginInvoke((Action)(() => { InitializeTuner(); }));
                 return;
@@ -504,6 +552,11 @@ namespace TunerSimulator
 
         private void SerialSend(string toSend)
         {
+            if (!m_serialEnabled)
+            {
+                return;
+            }
+
             while (!string.IsNullOrEmpty(m_serialSendBuffer))
             {
                 Thread.Sleep(2);
@@ -623,6 +676,26 @@ namespace TunerSimulator
             SerialSend($"o{ctl.BaseOffsetStep.Value}");
             SerialSend($"s{ctl.BaseOffsetStepIncrement.Value}");
             //SerialSend($"s{ctl.BaseOffsetStepIncrement}");
+        }
+
+        private void MainForm_KeyDown(object sender, KeyEventArgs e)
+        {
+            var noteIndex = 0;
+            switch (e.KeyCode)
+            {
+                case Keys.Q: noteIndex = 0; break;
+                case Keys.W: noteIndex = 1; break;
+                case Keys.E: noteIndex = 2; break;
+                case Keys.R: noteIndex = 3; break;
+                case Keys.T: noteIndex = 4; break;
+                case Keys.Y: noteIndex = 5; break;
+                case Keys.U: noteIndex = 6; break;
+                case Keys.I: noteIndex = 7; break;
+                case Keys.O: noteIndex = 8; break;
+            }
+
+            m_bagpipeOutputs[3].Sample = m_chanterNotes[noteIndex];
+            m_bagpipeOutputs[3].DesiredFrequency = m_chanterNotes[noteIndex].Frequency;
         }
     }
 }

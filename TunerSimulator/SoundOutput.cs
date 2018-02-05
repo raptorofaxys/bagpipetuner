@@ -62,7 +62,16 @@ namespace TunerSimulator
 
         public float DesiredFrequency;
 
-        private float m_sampleCursor;
+        public float SampleCursor { get; private set; }
+
+        public void RandomizePosition()
+        {
+            var r = new Random();
+            lock (m_lock)
+            {
+                SampleCursor = r.Next() % m_sample.Samples.Length;
+            }
+        }
 
         float GetSample(float index)
         {
@@ -79,14 +88,14 @@ namespace TunerSimulator
             {
                 if (m_sample != null)
                 {
+                    SampleCursor %= m_sample.Samples.Length;
+
                     float samplingRatio = DesiredFrequency / m_sample.Frequency;
 
-                    for (var i = 0; i < sampleCount; ++i, m_sampleCursor += samplingRatio)
+                    for (var i = 0; i < sampleCount; ++i, SampleCursor += samplingRatio)
                     {
-                        buffer[offset + i] = GetSample(m_sampleCursor);
+                        buffer[offset + i] = GetSample(SampleCursor);
                     }
-
-                    m_sampleCursor %= m_sample.Samples.Length;
                 }
                 else
                 {
@@ -107,11 +116,11 @@ namespace TunerSimulator
         {
             get
             {
-                return provider.Sample;
+                return m_provider.Sample;
             }
             set
             {
-                provider.Sample = value;
+                m_provider.Sample = value;
             }
         }
 
@@ -119,21 +128,21 @@ namespace TunerSimulator
         {
             get
             {
-                return provider.DesiredFrequency;
+                return m_provider.DesiredFrequency;
             }
             set
             {
-                provider.DesiredFrequency = value;
+                m_provider.DesiredFrequency = value;
             }
         }
 
-        BufferResamplerProvider provider = new BufferResamplerProvider();
+        BufferResamplerProvider m_provider = new BufferResamplerProvider();
         WaveOut m_waveOut;
 
         public void Start()
         {
             Trace.Assert(m_waveOut == null);
-            provider.SetWaveFormat(44100, 1);
+            m_provider.SetWaveFormat(44100, 1);
 
             var outputNumber = -1;
             for (var i = 0; i < WaveOut.DeviceCount; ++i)
@@ -159,14 +168,20 @@ namespace TunerSimulator
 
             m_waveOut = new WaveOut();
             m_waveOut.DeviceNumber = outputNumber;
+            m_waveOut.DesiredLatency = 100;
 
-            m_waveOut.Init(provider);
+            m_waveOut.Init(m_provider);
             m_waveOut.Play();
 
             //for (int i = 0; i < 10; ++i)
             //{
             //    Thread.Sleep(1000);
             //}
+        }
+
+        public void RandomizePosition()
+        {
+            m_provider.RandomizePosition();
         }
 
         public void Stop()
