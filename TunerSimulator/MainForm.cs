@@ -146,6 +146,19 @@ namespace TunerSimulator
             tunerChannelControl4.BaseOffsetStep.Value = 4;
             tunerChannelControl4.BaseOffsetStepIncrement.Value = 2;
             tunerChannelControl4.SuspendChanges = false;
+
+            const bool fullRangeChannel0 = true;
+            if (fullRangeChannel0)
+            {
+                tunerChannelControl1.SuspendChanges = true;
+                tunerChannelControl1.MinFrequency.Value = 75;
+                tunerChannelControl1.MaxFrequency.Value = 1100;
+                tunerChannelControl1.CorrelationDipPercent.Value = 25;
+                tunerChannelControl1.GcfStep.Value = 2;
+                tunerChannelControl1.BaseOffsetStep.Value = 4;
+                tunerChannelControl1.BaseOffsetStepIncrement.Value = 2;
+                tunerChannelControl1.SuspendChanges = false;
+            }
         }
 
         void EnqueueTunerReading(TunerReading tr)
@@ -180,7 +193,10 @@ namespace TunerSimulator
                 tr.MinSignalAmplitude,
                 tr.MaxSignalAmplitude,
                 SPINNER[m_spinnerIndex]);
-            lblReading.ForeColor = IsReadingValid(m_samplePlayback.Frequency, tr) ? Color.DarkGreen : ((tr.SignalFrequency >= 0.0f) ? Color.DarkRed : Color.Black);
+            lblReading.ForeColor = IsReadingValid(m_samplePlayback.Frequency, tr) ? Color.DarkGreen
+                : ((tr.SignalFrequency >= 0.0f) ? Color.DarkRed
+                : (tr.MaxSignalAmplitude - tr.MinSignalAmplitude > 20.0f) ? Color.Black
+                : Color.DarkGray);
 
             m_spinnerIndex = (m_spinnerIndex + 1) % SPINNER.Length;
         }
@@ -488,9 +504,14 @@ namespace TunerSimulator
 
         private void SerialSend(string toSend)
         {
+            while (!string.IsNullOrEmpty(m_serialSendBuffer))
+            {
+                Thread.Sleep(2);
+            }
             lock (m_serialSendBufferLock)
             {
                 m_serialSendBuffer += toSend;
+                Console.WriteLine(toSend);
             }
         }
 
@@ -579,11 +600,11 @@ namespace TunerSimulator
 
         private void txtCorrelationDipPct_TextChanged(object sender, EventArgs e)
         {
-            int percent;
-            if (int.TryParse(txtCorrelationDipPct.Text, out percent))
-            {
-                SerialSend(string.Format("d{0}", percent));
-            }
+            //int percent;
+            //if (int.TryParse(txtCorrelationDipPct.Text, out percent))
+            //{
+            //    SerialSend(string.Format("d{0}", percent));
+            //}
         }
 
         private void cmbDumpMode_SelectedIndexChanged(object sender, EventArgs e)
@@ -595,12 +616,13 @@ namespace TunerSimulator
         {
             var ctl = (TunerChannelControl)sender;
             SerialSend($"c{ctl.ChannelIndex}");
-            SerialSend($"m{ctl.MinFrequency}");
-            SerialSend($"M{ctl.MaxFrequency}");
-            SerialSend($"p{ctl.CorrelationDipPercent}");
-            SerialSend($"g{ctl.GcfStep}");
-            SerialSend($"o{ctl.BaseOffsetStep}");
-            SerialSend($"s{ctl.BaseOffsetStepIncrement}");
+            SerialSend($"m{ctl.MinFrequency.Value}");
+            SerialSend($"M{ctl.MaxFrequency.Value}");
+            SerialSend($"p{ctl.CorrelationDipPercent.Value}");
+            SerialSend($"g{ctl.GcfStep.Value}");
+            SerialSend($"o{ctl.BaseOffsetStep.Value}");
+            SerialSend($"s{ctl.BaseOffsetStepIncrement.Value}");
+            //SerialSend($"s{ctl.BaseOffsetStepIncrement}");
         }
     }
 }

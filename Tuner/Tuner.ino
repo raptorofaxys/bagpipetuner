@@ -101,6 +101,8 @@ extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
 #define DEBUG_PRINT_STATEMENTS(x)
 #endif
 
+const char* COMMA_SEPARATOR = ", ";
+
 #define EQUAL_TEMPERAMENT 1
 #define JUST_TEMPERAMENT 2
 #define TEMPERAMENT JUST_TEMPERAMENT
@@ -780,10 +782,15 @@ public:
 	public:
 		Channel()
 		{
+			m_enableDetailedSearch = true;
+
 			m_gcfStep = 4;
 			m_correlationDipThresholdPercent = 25;
 			m_baseOffsetStep = 4;
 			m_baseOffsetStepIncrement = 2;
+
+			m_minFrequency = ABSOLUTE_MIN_FREQUENCY;
+			m_maxFrequency = ABSOLUTE_MAX_FREQUENCY;
 		}
 
 		void SetPin(int audioPin)
@@ -829,31 +836,6 @@ public:
 			return a + ((d * tFrac) >> FIXED_SHIFT);
 		}
 
-		//@TODO: use one function for integer offsets, another for fractional? no need for interpolation? does that make sense with the fixed-point math?
-		//unsigned long GetCorrelationFactorFixed(char* buffer, Fixed fixedOffset)
-		//{
-		//	unsigned long result = 0;
-		//	int integer = FIXED_INT(fixedOffset);
-		//	int frac = FIXED_FRAC(fixedOffset);
-		//	int correlationStep = s_correlationStep;
-
-		//	// If we're in MIDI mode, lower the precision to gain speed.
-		//	//if (m_mode == TunerMode::Midi)
-		//	//{
-		//	//	correlationStep <<= 1;
-		//	//}
-
-		//	for (int i = 0; i < WINDOW_SIZE; i += correlationStep)
-		//	{
-		//		// Note this is done with 16-bit math; this is slower, but gives more precision.  In tests, using 8-bit
-		//		// math did not yield sufficient precision.
-		//		int a = buffer[i];
-		//		int b = InterpolateChar(buffer[i + integer], buffer[i + integer + 1], frac);
-		//		result += abs(b - a);
-		//	}
-		//	return result;
-		//}
-		
 		unsigned long GetCorrelationFactorFixed(Fixed fixedOffset, int windowSize, int correlationStep)
 		{
 			unsigned long result = 0;
@@ -871,7 +853,37 @@ public:
 			char* pB2 = pB + 1;
 
 			//@OPTIMIZE: for B, move b2 into b, then indirect-read the new b2? might not make a difference
+			// No: we are skipping ahead by correlation step, which is usually well above 1, so we need to read both values anyway
 			for (int i = 0; i < windowSize; i += correlationStep, pA += correlationStep, pB += correlationStep, pB2 += correlationStep)
+			{
+				// Note this is done with 16-bit math; this is slower, but gives more precision. In tests, using 8-bit fixed-point
+				// math did not yield sufficient precision.
+				int a = *pA;
+				int b = InterpolateChar(*pB, *pB2, frac);
+				result += abs(b - a);
+			}
+			return result;
+		}
+
+		//@TODO: test this optimized version
+		unsigned long GetCorrelationFactorFixed2(Fixed fixedOffset, int windowSize, int correlationStep)
+		{
+			unsigned long result = 0;
+			int integer = FIXED_INT(fixedOffset);
+			int frac = FIXED_FRAC(fixedOffset);
+
+			// If we're in MIDI mode, lower the precision to gain speed.
+			//if (m_mode == TunerMode::Midi)
+			//{
+			//	correlationStep <<= 1;
+			//}
+
+			char* pA = &g_recordingBuffer[0];
+			char* pB = &g_recordingBuffer[integer];
+			char* pB2 = pB + 1;
+			char* pEndA = pA + windowSize;
+
+			for (; pA < pEndA; pA += correlationStep, pB += correlationStep, pB2 += correlationStep)
 			{
 				// Note this is done with 16-bit math; this is slower, but gives more precision. In tests, using 8-bit fixed-point
 				// math did not yield sufficient precision.
@@ -962,6 +974,13 @@ public:
 
 			DEBUG_PRINT_STATEMENTS(
 			{
+				PrintStringInt("cdp", m_correlationDipThresholdPercent); Ln();
+				PrintStringInt("gcfs", m_gcfStep); Ln();
+				PrintStringInt("bos", m_baseOffsetStep); Ln();
+				PrintStringInt("bosi", m_baseOffsetStepIncrement); Ln();
+				PrintStringInt("minf", m_minFrequency); Ln();
+				PrintStringInt("maxf", m_maxFrequency); Ln();
+				PrintStringInt("bufferSize", bufferSize); Ln();
 				PrintStringInt("signalMin", signalMin); Ln();
 				PrintStringInt("signalMax", signalMax); Ln();
 				PrintStringInt("maxAmplitude", maxAmplitude); Ln();
@@ -977,6 +996,7 @@ public:
 			bool doPrint = false;
 			Fixed minBestOffset = ~0;
 			Fixed maxBestOffset = ~0;
+			Fixed bestOffset = ~0;
             // Normally we only run once through the below code. This loop is only here in case we need to print the result of some computations. This is typically done when an abnormal result is obtained.
 			for (;;)
 			{
@@ -987,7 +1007,7 @@ public:
 				unsigned long maxCorrelation = 0;
 				unsigned long correlationDipThreshold = 0;
 				unsigned long bestCorrelation = ~0;
-				const Fixed offsetToStartPreciseSampling = I2FIXED(minSamples- 2);
+				const Fixed offsetToStartPreciseSampling = max(I2FIXED(minSamples - 2), 0);
 				unsigned long lastCorrelation = ~0;
 
 				Fixed offsetStep = m_baseOffsetStep;
@@ -1021,16 +1041,16 @@ public:
 						//PrintStringInt("ofs", offset); DEFAULT_PRINT->print(" ");
 						//PrintStringLong("gcf", curCorrelation); DEFAULT_PRINT->print(" "); Ln();
 						DEFAULT_PRINT->print("#");
-						DEFAULT_PRINT->print(offset); DEFAULT_PRINT->print(", ");
-						DEFAULT_PRINT->print(curCorrelation); DEFAULT_PRINT->print(", ");
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 4) * 4); DEFAULT_PRINT->print(", ");
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 8) * 8); DEFAULT_PRINT->print(", ");
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 16) * 16); DEFAULT_PRINT->print(", ");
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 24) * 24); DEFAULT_PRINT->print(", ");
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 32) * 32); DEFAULT_PRINT->print(", ");
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 64) * 64); DEFAULT_PRINT->print(", ");
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 96) * 96); DEFAULT_PRINT->print(", ");
-						DEFAULT_PRINT->print(maxCorrelation); DEFAULT_PRINT->print(", ");
+						DEFAULT_PRINT->print(offset); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+						DEFAULT_PRINT->print(curCorrelation); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 4) * 4); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 8) * 8); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 16) * 16); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 24) * 24); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 32) * 32); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 64) * 64); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 96) * 96); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+						DEFAULT_PRINT->print(maxCorrelation); DEFAULT_PRINT->print(COMMA_SEPARATOR);
 						DEFAULT_PRINT->print(correlationDipThreshold);
 						Ln();
 					}
@@ -1109,36 +1129,130 @@ public:
 					return -1.0f;
 				}
 
-				// Upsample the signal to get a better bearing on the real frequency
-				//@TODO: upsample in stages, reducing the GCF step gradually
-#if 0
-				Fixed minOffset = bestOffset - OFFSET_STEP;
-				Fixed maxOffset = bestOffset + OFFSET_STEP;
-				bestCorrelation = ~0;
-				bestOffset = 0;
-				for (Fixed offset = minOffset; offset <= maxOffset; ++offset) // step by one, which is the smallest possible fixed-point step
-				{
-					unsigned long curCorrelation = GetCorrelationFactorFixed(offset, 2);
-					//DEFAULT_PRINT->print(offset); DEFAULT_PRINT->print(", ");
-					//DEFAULT_PRINT->print(curCorrelation);
-					//Ln();
+				// Refine the search for the offset that produces the true minimum autocorrelation
+				// At this point, were we to use a very small GCF step, I think we could use a binary search
+				// to find the minimum; it feels like we can rely on the area of the autocorrelation function
+				// that we are exploring to be parabola-like with one actual minimum. However, a few
+				// questions arise:
+				// -is it faster to search fewer points with a small GCF step or more points with a bigger GCF step? (that depends)
+				// -with a bigger GCF step, are we introducing sampling artifacts in the autocorrelation function which are big enough
+				//  to through off the hunt for a minimum?
+				//@TODO: try searching for the minimum with various GCF steps and output the found minimum at the various steps;
+				// see how big we can make the step without affecting the accuracy of results
 
-					if (curCorrelation < bestCorrelation)
+				if (!m_enableDetailedSearch)
+				{
+					break;
+				}
+
+				//@TODO: upsample in stages, reducing the GCF step gradually
+				Fixed lowOffset = max(minBestOffset - offsetStep, 0);
+				unsigned long lowGcf = GetCorrelationFactorFixed(lowOffset, maxSamples, 2);
+				Fixed highOffset = maxBestOffset + offsetStep;
+				unsigned long highGcf = GetCorrelationFactorFixed(highOffset, maxSamples, 2);
+
+				DEBUG_PRINT_STATEMENTS(
+				{
+					//PrintStringInt("lowOffset", lowOffset); Ln();
+					//PrintStringInt("lowGcf", lowGcf); Ln();
+					//PrintStringInt("highOffset", highOffset); Ln();
+					//PrintStringInt("highGcf", highGcf); Ln();
+					PrintStringInt("minBestOffset", minBestOffset); Ln();
+					PrintStringInt("maxBestOffset", maxBestOffset); Ln();
+				});
+
+				int iterationCount = 0;
+				for (; iterationCount < 100; ++iterationCount)
+				{
+					Fixed lowOffsetOption = (2 * lowOffset + highOffset) / 3;
+					unsigned long lowGcfOption = GetCorrelationFactorFixed(lowOffsetOption, maxSamples, 2);
+					Fixed highOffsetOption = (lowOffset + 2 * highOffset) / 3;
+					unsigned long highGcfOption = GetCorrelationFactorFixed(highOffsetOption, maxSamples, 2);
+					
+					DEFAULT_PRINT->print("#");
+					DEFAULT_PRINT->print(m_minFrequency); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(m_maxFrequency); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(m_correlationDipThresholdPercent); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(m_gcfStep); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(m_baseOffsetStep); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(m_baseOffsetStepIncrement);
+					Ln();
+
+					DEFAULT_PRINT->print("#");
+					DEFAULT_PRINT->print(lowOffset); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(lowGcf); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(highOffset); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(highGcf); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(lowOffsetOption); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(lowGcfOption); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(highOffsetOption); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(highGcfOption); // DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					Ln();
+
+					if (highOffset - lowOffset <= 3)
 					{
-						bestCorrelation = curCorrelation;
-						bestOffset = offset;
-			}
-		}
-#endif
+						// We are ready to break out - simply find which of the four points we have has the minimum
+						// GCF
+						unsigned long minGcf = min(min(min(lowGcf, lowGcfOption), highGcfOption), highGcf);
+
+						// Set lowOffset as our best result; bias low
+						if (lowGcf == minGcf)
+						{
+							bestOffset = lowOffset;
+						}
+						else if (lowGcfOption == minGcf)
+						{
+							bestOffset = lowOffsetOption;
+						}
+						else if (highGcfOption == minGcf)
+						{
+							bestOffset = highOffsetOption;
+						}
+						else if (highGcf == minGcf)
+						{
+							bestOffset = highOffset;
+						}
+
+						DEFAULT_PRINT->print("#");
+						DEFAULT_PRINT->print(lowOffset);
+						Ln();
+
+						// We're done
+						break;
+					}
+
+					// Home in on the minimum. We want to keep the lowest point inside the extrema of our search.
+					if (lowGcfOption < highGcfOption)
+					{
+						highOffset = highOffsetOption;
+						highGcf = highGcfOption;
+					}
+					else
+					{
+						lowOffset = lowOffsetOption;
+						lowGcf = lowGcfOption;
+					}
+				}
+
 				break;
 			}
 
-			float result = GetFrequencyForOffsetFixed((static_cast<long>(minBestOffset) + static_cast<long>(maxBestOffset)) >> 1);
+			float result = (bestOffset != ~0)  ? GetFrequencyForOffsetFixed(bestOffset) : -2.0f;
 			minFrequency = GetFrequencyForOffsetFixed(maxBestOffset);
 			maxFrequency = GetFrequencyForOffsetFixed(minBestOffset);
+
+			DEBUG_PRINT_STATEMENTS(
+			{
+				PrintStringFloat("result", result); Ln();
+				PrintStringFloat("minFrequency", minFrequency); Ln();
+				PrintStringFloat("maxFrequency", maxFrequency); Ln();
+			});
+
 			return result;
 		}
 
+		bool m_enableDetailedSearch;
+		
 		int m_minFrequency;
 		int m_maxFrequency;
 		int m_correlationDipThresholdPercent;
@@ -1633,12 +1747,24 @@ public:
 					case 'm': m_channels[activeChannelIndex].m_minFrequency = Serial.parseInt(); break;
 					case 'M': m_channels[activeChannelIndex].m_maxFrequency = Serial.parseInt(); break;
 					case 'p': m_channels[activeChannelIndex].m_correlationDipThresholdPercent = Serial.parseInt(); break;
-					case 'g': m_channels[activeChannelIndex].m_gcfStep = max(Serial.parseInt(), 1); break;// @PCHANGE
-					case 'o': m_channels[activeChannelIndex].m_baseOffsetStep = max(Serial.parseInt(), 1); break;// @PCHANGE
-					case 's': m_channels[activeChannelIndex].m_baseOffsetStepIncrement = Serial.parseInt(); break;// @PCHANGE
+					case 'g': m_channels[activeChannelIndex].m_gcfStep = max(Serial.parseInt(), 1); break;
+					case 'o': m_channels[activeChannelIndex].m_baseOffsetStep = max(Serial.parseInt(), 1); break;
+					case 's': m_channels[activeChannelIndex].m_baseOffsetStepIncrement = Serial.parseInt(); break;
+					case 'x': m_channels[activeChannelIndex].m_enableDetailedSearch = (Serial.parseInt() != 0); break;
 					case 'd': g_dumpMode = Serial.parseInt(); break;
                 }
-            }
+
+				DEFAULT_PRINT->print("#");
+				DEFAULT_PRINT->print(command); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+				DEFAULT_PRINT->print(activeChannelIndex); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+				DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_minFrequency); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+				DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_maxFrequency); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+				DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_correlationDipThresholdPercent); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+				DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_gcfStep); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+				DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_baseOffsetStep); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+				DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_baseOffsetStepIncrement);
+				Ln();
+			}
 
 			DEBUG_PRINT_STATEMENTS(Serial.write("Main tuner loop"); Ln(););
 			
@@ -1790,10 +1916,10 @@ public:
 			//PrintStringInt("numCoarseCorrelations", numCoarseCorrelations); DEFAULT_PRINT->print("   "); Ln();
 			//PrintStringInt("numFineCorrelations", numFineCorrelations); DEFAULT_PRINT->print("   "); Ln();
 			//PrintStringFloat("Instant freq", instantFrequency); Ln();
-			PrintFloat(instantFrequency); Serial.print(", ");
-            PrintFloat(minSignalFrequency); Serial.print(", ");
-            PrintFloat(maxSignalFrequency); Serial.print(", ");
-            Serial.print(signalMin); Serial.print(", ");
+			PrintFloat(instantFrequency); Serial.print(COMMA_SEPARATOR);
+            PrintFloat(minSignalFrequency); Serial.print(COMMA_SEPARATOR);
+            PrintFloat(maxSignalFrequency); Serial.print(COMMA_SEPARATOR);
+            Serial.print(signalMin); Serial.print(COMMA_SEPARATOR);
             Serial.print(signalMax); Ln();
 			//Serial.print("#Line 1"); Ln();
 			//Serial.print("#Line 2"); Ln();
@@ -1815,7 +1941,7 @@ public:
 //			const int numCharacters = 31;
 //			const int centerCharacterIndex = numCharacters / 2;
 //			int characterIndex = (percent * numCharacters);
-//			const char* tunerCharacters[2][3] = {{"»", /*"·"*/"o", "«"}, {"|", "O", "|"}};
+//			const char* tunerCharacters[2][3] = {{"»", /*"·"*/"oCOMMA_SEPARATOR«"}, {"|COMMA_SEPARATOROCOMMA_SEPARATOR|"}};
 //			for (int i = 0; i < numCharacters; ++i)
 //			{
 //				int leftRightSelector = sgn(i - centerCharacterIndex) + 1;
