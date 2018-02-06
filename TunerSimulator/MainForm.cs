@@ -13,7 +13,7 @@ namespace TunerSimulator
 {
     public partial class MainForm : Form
     {
-        bool m_serialEnabled = false;
+        bool m_serialEnabled = true;
 
         bool m_closing = false;
         Task m_audioTask;
@@ -174,6 +174,11 @@ namespace TunerSimulator
             }
         }
 
+        bool IsTunerReadingAvailable()
+        {
+            return m_tunerReadingQueue.Count > 0;
+        }
+
         TunerReading DequeueTunerReading()
         {
             while (m_tunerReadingQueue.Count == 0)
@@ -209,6 +214,11 @@ namespace TunerSimulator
         void RunTunerTest(int testsPerPoint = 16, int substepsPerSample = 5)
         {
             //var numTestsPerStep = 16;
+            while (IsTunerReadingAvailable())
+            {
+                DequeueTunerReading();
+            }
+            WaitForRejectedReadings(2);
 
             var results = new List<TestResult>();
 
@@ -240,7 +250,11 @@ namespace TunerSimulator
 
             Console.WriteLine("Total Pass Ratio: {0:00.00}%", results.Average(tr => tr.PassRatio) * 100.0f);
             Console.WriteLine("Total Rejection Ratio: {0:00.00}%", results.Average(tr => tr.RejectionRatio) * 100.0f);
-            Console.WriteLine("Total Error Octave Error Ratio: {0:00.00}%", results.Where(tr => tr.NumFailed > 0).Average(tr => tr.WrongOctaveFailReasonRatio) * 100.0f);
+            var resultsWithFailures = results.Where(tr => tr.NumFailed > 0);
+            if (resultsWithFailures.Any())
+            {
+                Console.WriteLine("Total Error Octave Error Ratio: {0:00.00}%", resultsWithFailures.Average(tr => tr.WrongOctaveFailReasonRatio) * 100.0f);
+            }
 
             //BeginInvoke((Action)(() => { btnFullTest.Enabled = true; }));
             BeginInvoke((Action)(() => OnTestCompleted()));
@@ -436,7 +450,7 @@ namespace TunerSimulator
             m_soundOutput = new SoundOutput();
             m_soundOutput.Start();
 
-            StartDrones();
+            //StartDrones();
 
             //m_serialTask = Task.Run(() => DumpSerial());
             m_serialTask = Task.Run(() => ReadTunerFrequencyFromSerial());
