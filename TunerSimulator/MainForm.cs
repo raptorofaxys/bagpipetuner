@@ -199,7 +199,7 @@ namespace TunerSimulator
                 tr.SignalFrequency,
                 tr.MinSignalFrequency,
                 tr.MaxSignalFrequency,
-                m_samplePlayback.Frequency,
+                m_soundOutput.Sample != null ? m_soundOutput.Sample.Frequency.ToString() : "-",
                 tr.MinSignalAmplitude,
                 tr.MaxSignalAmplitude,
                 SPINNER[m_spinnerIndex]);
@@ -694,6 +694,11 @@ namespace TunerSimulator
 
         private void MainForm_KeyDown(object sender, KeyEventArgs e)
         {
+            if (m_bagpipeOutputs == null)
+            {
+                return;
+            }
+
             var noteIndex = 0;
             switch (e.KeyCode)
             {
