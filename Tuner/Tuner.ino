@@ -1184,7 +1184,7 @@ public:
 				// We start a bit before the minimum offset to prime the thresholds
 				//for (Fixed offset = max(offsetAtMinFrequency - OFFSET_STEP * 4, 0); offset < maxSamplesFixed; offset += OFFSET_STEP)
 				// make a function out of the subdivision loop; scan from offset to offset with a given step and adaptive parameters, with a given skip for GCF
-				for (Fixed offset = (offsetToStartPreciseSampling >> 1); offset < maxSamplesFixed; ) // is this end condition right? shouldn't it be maxSamplesFixed - windowSize or something?
+				for (Fixed offset = (offsetToStartPreciseSampling >> 1); offset < maxSamplesFixed; )
 				{
                     //@TODO: why the shift here? is this a legacy artifact?
                     //unsigned long curCorrelation = GetCorrelationFactorFixed(offset, 2) << 8; // was using 96, which worked for the simple function generator but didn't work quite as well for the bagpipe signal
