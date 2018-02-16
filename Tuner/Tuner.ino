@@ -441,6 +441,12 @@ void PrintStringFloat(char const* s, float f, int decimals = 5, Print* p = DEFAU
 
 #endif //ENABLE_PRINT
 
+//@HACK
+#include "tuner_utils.h"
+
+//#define PROFILE_STATEMENT(count, msg, x) { unsigned long startMs = millis(); for (unsigned long i = 0; i < count; ++i) { x } unsigned long endMs = millis(); float timePerIteration = static_cast<float>(endMs - startMs) / count; PrintStringFloat(msg, timePerIteration); Ln(); }
+//#define PROFILE_STATEMENT(count, msg, x) { unsigned long startUs = micros(); for (unsigned long i = 0; i < count; ++i) { x } unsigned long endUs = micros(); double timePerIteration = static_cast<double>(endUs - startUs) / count; PrintStringFloat(msg, static_cast<float>(timePerIteration)); Ln(); }
+
 const int kDebounceMs = 50;
 
 void Blink(int times = 1)
@@ -711,11 +717,11 @@ float g_noteSemitoneRatio[] =
 #endif
 
 typedef int Fixed;
-static int const FIXED_SHIFT = 5;
+static int const FIXED_SHIFT = 5; // @TODO: can we bump this up to 6? where is the issue? (2*6=12 => 4 bits left for integer portion)
 static int const FIXED_ONE = (1 << FIXED_SHIFT);
 static int const FRAC_MASK = (1 << FIXED_SHIFT) - 1;
-static int const FIXED_SHIFT_HI = 8 - FIXED_SHIFT;
-static int const FIXED_MASK_HI = ~((1 << FIXED_SHIFT_HI) - 1);
+//static int const FIXED_SHIFT_HI = 8 - FIXED_SHIFT;
+//static int const FIXED_MASK_HI = ~((1 << FIXED_SHIFT_HI) - 1);
 #define FIXED_INT(x) int(x >> FIXED_SHIFT)
 #define FIXED_FRAC(x) int(x & FRAC_MASK)
 #define		I2FIXED(x) ((Fixed) ((x) << FIXED_SHIFT))
@@ -739,7 +745,7 @@ static int const ADC_CLOCKS_PER_ADC_CONVERSION = 13;
 static unsigned long const CPU_CYCLES_PER_SAMPLE = ADC_CLOCKS_PER_ADC_CONVERSION * PRESCALER_DIVIDE;
 static unsigned long const SAMPLES_PER_SECOND = F_CPU / CPU_CYCLES_PER_SAMPLE;
 
-static int const ABSOLUTE_MIN_FREQUENCY = 75;
+static int const ABSOLUTE_MIN_FREQUENCY = 76;
 static int const ABSOLUTE_MAX_FREQUENCY = 1100;
 static int const ABSOLUTE_MIN_SAMPLES = SAMPLES_PER_SECOND / ABSOLUTE_MAX_FREQUENCY;
 static int const ABSOLUTE_MAX_SAMPLES = SAMPLES_PER_SECOND / ABSOLUTE_MIN_FREQUENCY;
@@ -747,12 +753,16 @@ static int const ABSOLUTE_MAX_SAMPLES = SAMPLES_PER_SECOND / ABSOLUTE_MIN_FREQUE
 static int const MAX_BUFFER_SIZE = 2 * ABSOLUTE_MAX_SAMPLES + 1; // for interpolation
 //STATIC_ASSERT(true);
 STATIC_ASSERT((SAMPLES_PER_SECOND / 2) > ABSOLUTE_MAX_FREQUENCY);
+//STATIC_ASSERT(ABSOLUTE_MAX_SAMPLES <= 255); // so we can use unsigned chars as offsets; this is not the case with a prescaler of 101b and a minimum frequency of 75 Hz
 
 template <unsigned long i> struct PrintN;
 //PrintN<SAMPLES_PER_SECOND> n1;
 //PrintN<BUFFER_SIZE> n1;
 //PrintN<WINDOW_SIZE> n1;
 //PrintN<MIN_SAMPLES> n1;
+//PrintN<SAMPLES_PER_SECOND> n;
+//PrintN<ABSOLUTE_MAX_SAMPLES> n;
+//PrintN<ABSOLUTE_MIN_SAMPLES> n;
 
 // This buffer is now global because we need to the compiler to use faster addressing modes that are only available with
 // fixed memory addresses. The buffer is now shared between the different tuner channels.
@@ -829,44 +839,86 @@ public:
 		}
 
 		// Linearly interpolates between two 8-bit signed values.
-		char InterpolateChar(char a, char b, char tFrac)
+		char InterpolateChar_old(char a, char b, char tFrac)
 		{
 			int d = b - a;
 			//@TODO: test casting to char before the addition to save on the 16-bit add
 			return a + ((d * tFrac) >> FIXED_SHIFT);
 		}
 
-		unsigned long GetCorrelationFactorFixed(Fixed fixedOffset, int windowSize, int correlationStep)
+		// Linearly interpolates between two 8-bit signed values.
+		char InterpolateChar(char a, char b, char tFrac)
 		{
-			unsigned long result = 0;
-			int integer = FIXED_INT(fixedOffset);
-			int frac = FIXED_FRAC(fixedOffset);
-
-			// If we're in MIDI mode, lower the precision to gain speed.
-			//if (m_mode == TunerMode::Midi)
-			//{
-			//	correlationStep <<= 1;
-			//}
-
-			char* pA = &g_recordingBuffer[0];
-			char* pB = &g_recordingBuffer[integer];
-			char* pB2 = pB + 1;
-
-			//@OPTIMIZE: for B, move b2 into b, then indirect-read the new b2? might not make a difference
-			// No: we are skipping ahead by correlation step, which is usually well above 1, so we need to read both values anyway
-			for (int i = 0; i < windowSize; i += correlationStep, pA += correlationStep, pB += correlationStep, pB2 += correlationStep)
-			{
-				// Note this is done with 16-bit math; this is slower, but gives more precision. In tests, using 8-bit fixed-point
-				// math did not yield sufficient precision.
-				int a = *pA;
-				int b = InterpolateChar(*pB, *pB2, frac);
-				result += abs(b - a);
-			}
-			return result;
+			int d = b - a;
+			return a + static_cast<char>((d * tFrac) >> FIXED_SHIFT);
 		}
 
-		//@TODO: test this optimized version
-		unsigned long GetCorrelationFactorFixed2(Fixed fixedOffset, int windowSize, int correlationStep)
+		//void __attribute__ ((noinline)) foo() 
+		//{
+		//x
+		//}
+
+		//attribute ((noinline)) void foo() { x }
+
+		//unsigned long __attribute__((noinline)) GetCorrelationFactorFixed_old(Fixed fixedOffset, int windowSize, int correlationStep)
+		//{
+		//	unsigned long result = 0;
+		//	int integer = FIXED_INT(fixedOffset);
+		//	int frac = FIXED_FRAC(fixedOffset);
+
+		//	// If we're in MIDI mode, lower the precision to gain speed.
+		//	//if (m_mode == TunerMode::Midi)
+		//	//{
+		//	//	correlationStep <<= 1;
+		//	//}
+
+		//	char* pA = &g_recordingBuffer[0];
+		//	char* pB = &g_recordingBuffer[integer];
+		//	char* pB2 = pB + 1;
+
+		//	//@OPTIMIZE: for B, move b2 into b, then indirect-read the new b2? might not make a difference
+		//	// No: we are skipping ahead by correlation step, which is usually well above 1, so we need to read both values anyway
+		//	for (int i = 0; i < windowSize; i += correlationStep, pA += correlationStep, pB += correlationStep, pB2 += correlationStep)
+		//	{
+		//		// Note this is done with 16-bit math; this is slower, but gives more precision. In tests, using 8-bit fixed-point
+		//		// math did not yield sufficient precision.
+		//		int a = *pA;
+		//		int b = InterpolateChar_old(*pB, *pB2, frac);
+		//		result += abs(b - a);
+		//	}
+		//	return result;
+		//}
+
+		//unsigned long __attribute__((noinline)) GetCorrelationFactorFixed(Fixed fixedOffset, int windowSize, int correlationStep)
+		//{
+		//	unsigned long result = 0;
+		//	int integer = FIXED_INT(fixedOffset);
+		//	int frac = FIXED_FRAC(fixedOffset);
+
+		//	// If we're in MIDI mode, lower the precision to gain speed.
+		//	//if (m_mode == TunerMode::Midi)
+		//	//{
+		//	//	correlationStep <<= 1;
+		//	//}
+
+		//	char* pA = &g_recordingBuffer[0];
+		//	char* pB = &g_recordingBuffer[integer];
+		//	char* pB2 = pB + 1;
+		//	char* pEndA = pA + windowSize;
+
+		//	for (; pA < pEndA; pA += correlationStep, pB += correlationStep, pB2 += correlationStep)
+		//	{
+		//		// Note this is done with 16-bit math; this is slower, but gives more precision. In tests, using 8-bit fixed-point
+		//		// math did not yield sufficient precision.
+		//		int a = *pA;
+		//		//@TODO: test doing this math on a char; does this require shifting all samples right by 1?
+		//		int b = InterpolateChar_old(*pB, *pB2, frac);
+		//		result += abs(b - a);
+		//	}
+		//	return result;
+		//}
+
+		unsigned long __attribute__((noinline)) GetCorrelationFactorFixed(Fixed fixedOffset, int windowSize, int correlationStep)
 		{
 			unsigned long result = 0;
 			int integer = FIXED_INT(fixedOffset);
@@ -888,11 +940,71 @@ public:
 				// Note this is done with 16-bit math; this is slower, but gives more precision. In tests, using 8-bit fixed-point
 				// math did not yield sufficient precision.
 				int a = *pA;
+				//@TODO: test doing this math on a char; does this require shifting all samples right by 1?
+				//Answer: not any faster
 				int b = InterpolateChar(*pB, *pB2, frac);
 				result += abs(b - a);
 			}
 			return result;
 		}
+
+		//unsigned long __attribute__((noinline)) GetCorrelationFactorFixed3(Fixed fixedOffset, int windowSize, int correlationStep)
+		//{
+		//	unsigned long result = 0;
+		//	int integer = FIXED_INT(fixedOffset);
+		//	int frac = FIXED_FRAC(fixedOffset);
+
+		//	// If we're in MIDI mode, lower the precision to gain speed.
+		//	//if (m_mode == TunerMode::Midi)
+		//	//{
+		//	//	correlationStep <<= 1;
+		//	//}
+
+		//	char* pA = &g_recordingBuffer[0];
+		//	char* pB = &g_recordingBuffer[integer];
+		//	char* pB2 = pB + 1;
+
+		//	//@OPTIMIZE: for B, move b2 into b, then indirect-read the new b2? might not make a difference
+		//	// No: we are skipping ahead by correlation step, which is usually well above 1, so we need to read both values anyway
+		//	for (int i = 0; i < windowSize; i += correlationStep, pA += correlationStep, pB += correlationStep, pB2 += correlationStep)
+		//	{
+		//		// Note this is done with 16-bit math; this is slower, but gives more precision. In tests, using 8-bit fixed-point
+		//		// math did not yield sufficient precision.
+		//		int a = *pA;
+		//		int b = InterpolateChar(*pB, *pB2, frac);
+		//		result += abs(b - a);
+		//	}
+		//	return result;
+		//}
+
+		//unsigned long __attribute__((noinline)) GetCorrelationFactorFixed4(Fixed fixedOffset, int windowSize, int correlationStep)
+		//{
+		//	unsigned long result = 0;
+		//	int integer = FIXED_INT(fixedOffset);
+		//	int frac = FIXED_FRAC(fixedOffset);
+
+		//	// If we're in MIDI mode, lower the precision to gain speed.
+		//	//if (m_mode == TunerMode::Midi)
+		//	//{
+		//	//	correlationStep <<= 1;
+		//	//}
+
+		//	char* pA = &g_recordingBuffer[0];
+		//	char* pB = &g_recordingBuffer[integer];
+		//	char* pB2 = pB + 1;
+
+		//	//@OPTIMIZE: for B, move b2 into b, then indirect-read the new b2? might not make a difference
+		//	// No: we are skipping ahead by correlation step, which is usually well above 1, so we need to read both values anyway
+		//	for (int i = 0; i < windowSize; i += correlationStep, pA += correlationStep, pB += correlationStep, pB2 += correlationStep)
+		//	{
+		//		// Note this is done with 16-bit math; this is slower, but gives more precision. In tests, using 8-bit fixed-point
+		//		// math did not yield sufficient precision.
+		//		char a = *pA;
+		//		char b = InterpolateChar(*pB, *pB2, frac);
+		//		result += abs(b - a);
+		//	}
+		//	return result;
+		//}
 
 		//unsigned long GetCorrelationFactorPrime(unsigned long currentCorrellation, int numToDate, unsigned long sumToDate)
 		//{
@@ -1027,14 +1139,63 @@ public:
                     //Ln();
                 }
 
+				{
+					const unsigned long iterations = 2000;
+
+					// Look at assembler output?
+					//DEFAULT_PRINT->print("#");
+					//PROFILE_STATEMENT_LINE({ GetCorrelationFactorFixed_old(m_gcfStep, maxSamples, m_gcfStep); });
+					//DEFAULT_PRINT->print("#");
+					//PROFILE_STATEMENT_LINE({ GetCorrelationFactorFixed(m_gcfStep, maxSamples, m_gcfStep); });
+					//DEFAULT_PRINT->print("#");
+					//PROFILE_STATEMENT_LINE({ GetCorrelationFactorFixed2(m_gcfStep, maxSamples, m_gcfStep); });
+					//DEFAULT_PRINT->print("#");
+					//PROFILE_STATEMENT_LINE({ GetCorrelationFactorFixed3(m_gcfStep, maxSamples, m_gcfStep); });
+					//DEFAULT_PRINT->print("#");
+					//PROFILE_STATEMENT_LINE({ GetCorrelationFactorFixed4(m_gcfStep, maxSamples, m_gcfStep); });
+					//DEFAULT_PRINT->print("#");
+					//PROFILE_STATEMENT_LINE({ useless += GetCorrelationFactorFixed_old(m_gcfStep, maxSamples, m_gcfStep); });
+					//DEFAULT_PRINT->print("#");
+					//PROFILE_STATEMENT_LINE({ useless += GetCorrelationFactorFixed(m_gcfStep, maxSamples, m_gcfStep); });
+					//DEFAULT_PRINT->print("#");
+					//PROFILE_STATEMENT_LINE({ useless += GetCorrelationFactorFixed2(m_gcfStep, maxSamples, m_gcfStep); });
+					//DEFAULT_PRINT->print("#");
+					//PROFILE_STATEMENT_LINE({ useless += GetCorrelationFactorFixed3(m_gcfStep, maxSamples, m_gcfStep); });
+					//DEFAULT_PRINT->print("#");
+					//PROFILE_STATEMENT_LINE({ useless += GetCorrelationFactorFixed4(m_gcfStep, maxSamples, m_gcfStep); });
+					//DEFAULT_PRINT->print("#");
+					//PrintStringLong("useless", useless); Ln();
+					//PROFILE_STATEMENT_LINE(iterations, "#GCFo", { volatile unsigned long gcf = GetCorrelationFactorFixed_old(0, maxSamples, m_gcfStep); });
+					//PROFILE_STATEMENT_LINE(iterations, "#GCF", { volatile unsigned long gcf = GetCorrelationFactorFixed(0, maxSamples, m_gcfStep); });
+					//PROFILE_STATEMENT_LINE(iterations, "#GCF2", { volatile unsigned long gcf = GetCorrelationFactorFixed2(0, maxSamples, m_gcfStep); });
+					//PROFILE_STATEMENT_LINE(iterations, "#GCF3", { volatile unsigned long gcf = GetCorrelationFactorFixed3(0, maxSamples, m_gcfStep); });
+					//PROFILE_STATEMENT(iterations, "#GCFo", { GetCorrelationFactorFixed_old(0, maxSamples, m_gcfStep); });
+					//PROFILE_STATEMENT(iterations, "#GCF" , { GetCorrelationFactorFixed(0, maxSamples, m_gcfStep); });
+					//PROFILE_STATEMENT(iterations, "#GCF2", { GetCorrelationFactorFixed2(0, maxSamples, m_gcfStep); });
+				}
+
+				//char t;
+
+				//PROFILE_STATEMENT(300000UL, "#IC" , { t = InterpolateChar(5, 10, 10); });
+				//DEFAULT_PRINT->print("#"); DEFAULT_PRINT->print(t); Ln();
+				//PROFILE_STATEMENT(300000UL, "#IC2", { t = InterpolateChar(5, 10, 10); });
+				//DEFAULT_PRINT->print("#"); DEFAULT_PRINT->print(t); Ln();
+
 				// We start a bit before the minimum offset to prime the thresholds
 				//for (Fixed offset = max(offsetAtMinFrequency - OFFSET_STEP * 4, 0); offset < maxSamplesFixed; offset += OFFSET_STEP)
 				// make a function out of the subdivision loop; scan from offset to offset with a given step and adaptive parameters, with a given skip for GCF
-				for (Fixed offset = (offsetToStartPreciseSampling >> 1); offset < maxSamplesFixed; )
+				for (Fixed offset = (offsetToStartPreciseSampling >> 1); offset < maxSamplesFixed; ) // is this end condition right? shouldn't it be maxSamplesFixed - windowSize or something?
 				{
                     //@TODO: why the shift here? is this a legacy artifact?
                     //unsigned long curCorrelation = GetCorrelationFactorFixed(offset, 2) << 8; // was using 96, which worked for the simple function generator but didn't work quite as well for the bagpipe signal
-                    unsigned long curCorrelation = GetCorrelationFactorFixed(offset, maxSamples, m_gcfStep);
+					unsigned long curCorrelation = GetCorrelationFactorFixed(offset, maxSamples, m_gcfStep);
+					//unsigned long curCorrelation2 = GetCorrelationFactorFixed4(offset, maxSamples, m_gcfStep);
+					//if (curCorrelation != curCorrelation2)
+					//{
+					//	DEFAULT_PRINT->print("#");
+					//	DEFAULT_PRINT->print("GCF discrepancy");
+					//	Ln();
+					//}
 
 					if (doPrint && (g_dumpMode == DumpMode::DumpGcf))
 					{
@@ -1327,7 +1488,7 @@ public:
 		// Left-adjust result so we only have to read 8 bits
 		sbi(ADMUX, ADLAR); // right-adjust for 8 bits
 
-		// Setup the prescaler; divide by 32
+		// Setup the prescaler
 		unsigned char adcsra = ADCSRA;
 		adcsra = ((adcsra & 0xF8) | PRESCALER); // mask off / re-set prescaler bits
 		ADCSRA = adcsra;
@@ -1715,6 +1876,14 @@ public:
 	void Go()
 	{
 		DEBUG_PRINT_STATEMENTS(Serial.write("Initializing..."); Ln(););
+
+		DEFAULT_PRINT->print("#");
+		float maxFreq = m_channels[0].GetFrequencyForOffsetFixed(I2FIXED(ABSOLUTE_MIN_SAMPLES));
+		float secondLastFreq = m_channels[0].GetFrequencyForOffsetFixed(I2FIXED(ABSOLUTE_MIN_SAMPLES) + 1);
+		PrintStringFloat("Max freq", maxFreq);
+		PrintStringFloat("Second last freq", secondLastFreq);
+		PrintStringFloat("Min freq discr", maxFreq - secondLastFreq);
+		Ln();
 
 #define TEST_FREQUENCY(x) //PrintStringInt(#x, GetMidiNoteIndexForFrequency(x)); Ln();
 		TEST_FREQUENCY(474.83380f);
