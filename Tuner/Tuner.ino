@@ -1560,11 +1560,11 @@ public:
 
 	void LoadTuning()
 	{
-		Serial.println("Saving default tuning");
+		//Serial.println("Saving default tuning");
 		m_a440.f = DEFAULT_A440; //@HACK
 		SaveTuning();
 		m_a440.ul = LoadEepromLong(0);
-		PrintStringFloat("Loaded test tuning", m_a440.f);
+		//PrintStringFloat("Loaded test tuning", m_a440.f);
 
 		//m_a440.ul = LoadEepromLong(0);
 		m_a440.f = DEFAULT_A440; //@HACK
@@ -1877,13 +1877,15 @@ public:
 	{
 		DEBUG_PRINT_STATEMENTS(Serial.write("Initializing..."); Ln(););
 
-		DEFAULT_PRINT->print("#");
-		float maxFreq = m_channels[0].GetFrequencyForOffsetFixed(I2FIXED(ABSOLUTE_MIN_SAMPLES));
-		float secondLastFreq = m_channels[0].GetFrequencyForOffsetFixed(I2FIXED(ABSOLUTE_MIN_SAMPLES) + 1);
-		PrintStringFloat("Max freq", maxFreq);
-		PrintStringFloat("Second last freq", secondLastFreq);
-		PrintStringFloat("Min freq discr", maxFreq - secondLastFreq);
-		Ln();
+		//{
+		//	DEFAULT_PRINT->print("#");
+		//	float maxFreq = m_channels[0].GetFrequencyForOffsetFixed(I2FIXED(ABSOLUTE_MIN_SAMPLES));
+		//	float secondLastFreq = m_channels[0].GetFrequencyForOffsetFixed(I2FIXED(ABSOLUTE_MIN_SAMPLES) + 1);
+		//	PrintStringFloat("Max freq", maxFreq);
+		//	PrintStringFloat("Second last freq", secondLastFreq);
+		//	PrintStringFloat("Min freq discr", maxFreq - secondLastFreq);
+		//	Ln();
+		//}
 
 #define TEST_FREQUENCY(x) //PrintStringInt(#x, GetMidiNoteIndexForFrequency(x)); Ln();
 		TEST_FREQUENCY(474.83380f);
@@ -1902,11 +1904,13 @@ public:
 		float filteredFrequency = -1.0f;
 
 		int activeChannelIndex = 0;
+
 		while(1)
 		{
-            if (Serial.available())
+            while (Serial.available())
             {
-                char command = Serial.read();
+				//DEFAULT_PRINT->print("#"); DEFAULT_PRINT->print(Serial.available()); Ln();
+				char command = Serial.read();
                 switch (command)
                 {
                     case 'I': g_dumpOnNullReading = true; break;
@@ -1921,6 +1925,7 @@ public:
 					case 's': m_channels[activeChannelIndex].m_baseOffsetStepIncrement = Serial.parseInt(); break;
 					case 'x': m_channels[activeChannelIndex].m_enableDetailedSearch = (Serial.parseInt() != 0); break;
 					case 'd': g_dumpMode = Serial.parseInt(); break;
+					case '\n': break;
                 }
 
 				DEFAULT_PRINT->print("#");
@@ -1934,6 +1939,8 @@ public:
 				DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_baseOffsetStepIncrement);
 				Ln();
 			}
+
+			//DEFAULT_PRINT->print("#Left input loop"); Ln();
 
 			DEBUG_PRINT_STATEMENTS(Serial.write("Main tuner loop"); Ln(););
 			

@@ -28,7 +28,7 @@ namespace TunerSimulator
 
         object m_frequencyReadingQueueLock = new object();
         object m_serialSendBufferLock = new object();
-        string m_serialSendBuffer;
+        Queue<String> m_serialSendBuffer = new Queue<string>();
 
         const string SPINNER = @"\|/-";
         int m_spinnerIndex;
@@ -487,6 +487,9 @@ namespace TunerSimulator
             // This loop is quite inefficient in terms of latency but it'll do fine for the purposes of this test harness
             var buffer = "";
             var commentBuffer = "";
+
+            var hasFirstReading = false;
+
             for (; !m_closing;)
             {
                 while (spSerial.BytesToRead > 0)
@@ -505,7 +508,7 @@ namespace TunerSimulator
                     else
                     {
                         buffer = buffer.Trim();
-                        //Console.WriteLine("Buf: {0}", buffer);
+                        //Console.WriteLine("<={0}", buffer);
 
                         if (!buffer.StartsWith("#"))
                         {
@@ -516,6 +519,9 @@ namespace TunerSimulator
                             //Console.Out.Flush();
                             if (!string.IsNullOrEmpty(commentBuffer))
                             {
+                                //Console.WriteLine(string.Format("\"{0}\"", commentBuffer));
+                                //Console.Out.Flush();
+
                                 var bufferCopy = string.Copy(commentBuffer);
                                 BeginInvoke((Action)(() => Clipboard.SetText(bufferCopy)));
                             }
@@ -533,6 +539,8 @@ namespace TunerSimulator
                                 EnqueueTunerReading(reading);
                                 BeginInvoke((Action)(() => OnTunerReading(reading)));
                                 //Console.WriteLine("Tuner frequency: {0} (raw: {1})", reading.SignalFrequency, buffer);
+
+                                hasFirstReading = true;
                             }
                         }
                         else
@@ -544,19 +552,19 @@ namespace TunerSimulator
                     }
                 }
 
-                var sendBuffer = "";
-                lock (m_serialSendBufferLock)
+                if (hasFirstReading && (m_serialSendBuffer.Count > 0))
                 {
-                    if (!string.IsNullOrEmpty(m_serialSendBuffer))
+                    var sendBuffer = "";
+                    lock (m_serialSendBufferLock)
                     {
-                        sendBuffer = string.Copy(m_serialSendBuffer);
-                        m_serialSendBuffer = "";
+                        sendBuffer = m_serialSendBuffer.Dequeue();
                     }
-                }
 
-                if (!string.IsNullOrEmpty(sendBuffer))
-                {
-                    spSerial.Write(sendBuffer);
+                    if (!string.IsNullOrEmpty(sendBuffer))
+                    {
+                        spSerial.Write(sendBuffer);
+                        //Console.WriteLine("=>{0}", sendBuffer);
+                    }
                 }
 
                 Thread.Sleep(3);
@@ -571,14 +579,10 @@ namespace TunerSimulator
                 return;
             }
 
-            while (!string.IsNullOrEmpty(m_serialSendBuffer))
-            {
-                Thread.Sleep(2);
-            }
             lock (m_serialSendBufferLock)
             {
-                m_serialSendBuffer += toSend;
-                Console.WriteLine(toSend);
+                m_serialSendBuffer.Enqueue(toSend + "\n");
+                //Console.WriteLine("({0})", toSend);
             }
         }
 
