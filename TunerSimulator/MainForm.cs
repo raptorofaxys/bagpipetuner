@@ -33,6 +33,10 @@ namespace TunerSimulator
         const string SPINNER = @"\|/-";
         int m_spinnerIndex;
 
+        int m_serialSendCounter;
+
+        string m_commentBuffer;
+
         //bool m_runTest = true;
 
         bool m_initializedTuner = false;
@@ -120,7 +124,9 @@ namespace TunerSimulator
             tunerChannelControl1.GcfStep.Value = 2;
             tunerChannelControl1.BaseOffsetStep.Value = 4;
             tunerChannelControl1.BaseOffsetStepIncrement.Value = 2;
+            tunerChannelControl1.DetailedSearchEnabled = true;
             tunerChannelControl1.SuspendChanges = false;
+            return;
 
             const int tenorDroneFreq = 239;
             tunerChannelControl2.SuspendChanges = true;
@@ -130,6 +136,7 @@ namespace TunerSimulator
             tunerChannelControl2.GcfStep.Value = 2;
             tunerChannelControl2.BaseOffsetStep.Value = 4;
             tunerChannelControl2.BaseOffsetStepIncrement.Value = 2;
+            tunerChannelControl1.DetailedSearchEnabled = true;
             tunerChannelControl2.SuspendChanges = false;
 
             tunerChannelControl3.SuspendChanges = true;
@@ -139,6 +146,7 @@ namespace TunerSimulator
             tunerChannelControl3.GcfStep.Value = 2;
             tunerChannelControl3.BaseOffsetStep.Value = 4;
             tunerChannelControl3.BaseOffsetStepIncrement.Value = 2;
+            tunerChannelControl1.DetailedSearchEnabled = true;
             tunerChannelControl3.SuspendChanges = false;
 
             const int chanterMinFreq = 420;
@@ -150,6 +158,7 @@ namespace TunerSimulator
             tunerChannelControl4.GcfStep.Value = 2;
             tunerChannelControl4.BaseOffsetStep.Value = 4;
             tunerChannelControl4.BaseOffsetStepIncrement.Value = 2;
+            tunerChannelControl1.DetailedSearchEnabled = true;
             tunerChannelControl4.SuspendChanges = false;
 
             const bool fullRangeChannel0 = true;
@@ -486,9 +495,6 @@ namespace TunerSimulator
 
             // This loop is quite inefficient in terms of latency but it'll do fine for the purposes of this test harness
             var buffer = "";
-            var commentBuffer = "";
-
-            var hasFirstReading = false;
 
             for (; !m_closing;)
             {
@@ -510,60 +516,9 @@ namespace TunerSimulator
                         buffer = buffer.Trim();
                         //Console.WriteLine("<={0}", buffer);
 
-                        if (!buffer.StartsWith("#"))
-                        {
-                            // Flush out any comment
-                            //var o = string.Format("Buf: {0}", commentBuffer);
-                            Console.Write(commentBuffer);
-                            //Console.WriteLine(commentBuffer);
-                            //Console.Out.Flush();
-                            if (!string.IsNullOrEmpty(commentBuffer))
-                            {
-                                //Console.WriteLine(string.Format("\"{0}\"", commentBuffer));
-                                //Console.Out.Flush();
-
-                                var bufferCopy = string.Copy(commentBuffer);
-                                BeginInvoke((Action)(() => Clipboard.SetText(bufferCopy)));
-                            }
-                            commentBuffer = "";
-
-                            var reading = new TunerReading();
-                            var values = buffer.Split(',');
-                            if (values.Length == 5)
-                            {
-                                float.TryParse(values[0], out reading.SignalFrequency);
-                                float.TryParse(values[1], out reading.MinSignalFrequency);
-                                float.TryParse(values[2], out reading.MaxSignalFrequency);
-                                float.TryParse(values[3], out reading.MinSignalAmplitude);
-                                float.TryParse(values[4], out reading.MaxSignalAmplitude);
-                                EnqueueTunerReading(reading);
-                                BeginInvoke((Action)(() => OnTunerReading(reading)));
-                                //Console.WriteLine("Tuner frequency: {0} (raw: {1})", reading.SignalFrequency, buffer);
-
-                                hasFirstReading = true;
-                            }
-                        }
-                        else
-                        {
-                            commentBuffer += buffer.Substring(1) + Console.Out.NewLine;
-                        }
+                        ProcessSerialInput(buffer);
 
                         buffer = "";
-                    }
-                }
-
-                if (hasFirstReading && (m_serialSendBuffer.Count > 0))
-                {
-                    var sendBuffer = "";
-                    lock (m_serialSendBufferLock)
-                    {
-                        sendBuffer = m_serialSendBuffer.Dequeue();
-                    }
-
-                    if (!string.IsNullOrEmpty(sendBuffer))
-                    {
-                        spSerial.Write(sendBuffer);
-                        //Console.WriteLine("=>{0}", sendBuffer);
                     }
                 }
 
@@ -572,7 +527,85 @@ namespace TunerSimulator
             spSerial.Close();
         }
 
-        private void SerialSend(string toSend)
+        private void ProcessSerialInput(string line)
+        {
+            if (string.IsNullOrEmpty(line))
+            {
+                return;
+            }
+
+            char lineType = line[0];
+            line = line.Substring(1);
+
+            if (lineType != '#')
+            {
+                // If we got any type of line that is not a comment, flush out the comment buffer
+                if (!string.IsNullOrEmpty(m_commentBuffer))
+                {
+                    Console.Write(string.Concat(m_commentBuffer.Split('\n').Select(l => string.Format("#{0}\n", l))));
+                    //Console.WriteLine(string.Format("\"{0}\"", commentBuffer));
+                    //Console.Out.Flush();
+
+                    var bufferCopy = string.Copy(m_commentBuffer);
+                    BeginInvoke((Action)(() => Clipboard.SetText(bufferCopy)));
+                }
+                m_commentBuffer = "";
+            }
+
+            switch (lineType)
+            {
+                case '#': m_commentBuffer += line + Console.Out.NewLine; break;
+                case 'r':
+                    {
+                        var reading = new TunerReading();
+                        var values = line.Split(',');
+                        if (values.Length == 5)
+                        {
+                            float.TryParse(values[0], out reading.SignalFrequency);
+                            float.TryParse(values[1], out reading.MinSignalFrequency);
+                            float.TryParse(values[2], out reading.MaxSignalFrequency);
+                            float.TryParse(values[3], out reading.MinSignalAmplitude);
+                            float.TryParse(values[4], out reading.MaxSignalAmplitude);
+                            EnqueueTunerReading(reading);
+                            BeginInvoke((Action)(() => OnTunerReading(reading)));
+                            //Console.WriteLine("Tuner frequency: {0} (raw: {1})", reading.SignalFrequency, line);
+                        }
+                    }
+                    break;
+                case 'e':
+                    {
+                        // Read back an echo
+                        Console.WriteLine("Echo: {0}", line);
+                    }
+                    break;
+                case 'c':
+                    {
+                        // Tuner is ready to accept a command; send one
+                        SendNextPendingSerialLine();
+                    }
+                    break;
+            }
+        }
+
+        private void SendNextPendingSerialLine()
+        {
+            if (m_serialSendBuffer.Count > 0)
+            {
+                var sendBuffer = "";
+                lock (m_serialSendBufferLock)
+                {
+                    sendBuffer = m_serialSendBuffer.Dequeue();
+                }
+
+                if (!string.IsNullOrEmpty(sendBuffer))
+                {
+                    spSerial.Write(sendBuffer);
+                    Console.WriteLine("=>{0}", sendBuffer.Trim());
+                }
+            }
+        }
+
+        private void SendSerialLine(string toSend)
         {
             if (!m_serialEnabled)
             {
@@ -582,6 +615,10 @@ namespace TunerSimulator
             lock (m_serialSendBufferLock)
             {
                 m_serialSendBuffer.Enqueue(toSend + "\n");
+
+                ++m_serialSendCounter;
+                m_serialSendBuffer.Enqueue(string.Format("e{0}\n", m_serialSendCounter));
+
                 //Console.WriteLine("({0})", toSend);
             }
         }
@@ -652,7 +689,7 @@ namespace TunerSimulator
 
         private void chkDumpOnNull_CheckedChanged(object sender, EventArgs e)
         {
-            SerialSend(chkDumpOnNull.Checked ? "I" : "i");
+            SendSerialLine(chkDumpOnNull.Checked ? "I" : "i");
         }
 
         private void txtMinDumpFrequency_TextChanged(object sender, EventArgs e)
@@ -660,7 +697,7 @@ namespace TunerSimulator
             float frequency;
             if (float.TryParse(txtMinDumpFrequency.Text, out frequency))
             {
-                SerialSend(string.Format("f{0}", frequency));
+                SendSerialLine(string.Format("f{0}", frequency));
             }
         }
 
@@ -680,20 +717,20 @@ namespace TunerSimulator
 
         private void cmbDumpMode_SelectedIndexChanged(object sender, EventArgs e)
         {
-            SerialSend($"d{cmbDumpMode.SelectedIndex}");
+            SendSerialLine($"d{cmbDumpMode.SelectedIndex}");
         }
 
         private void tunerChannelControl_ConfigurationChanged(object sender, EventArgs e)
         {
             var ctl = (TunerChannelControl)sender;
-            SerialSend($"c{ctl.ChannelIndex}");
-            SerialSend($"m{ctl.MinFrequency.Value}");
-            SerialSend($"M{ctl.MaxFrequency.Value}");
-            SerialSend($"p{ctl.CorrelationDipPercent.Value}");
-            SerialSend($"g{ctl.GcfStep.Value}");
-            SerialSend($"o{ctl.BaseOffsetStep.Value}");
-            SerialSend($"s{ctl.BaseOffsetStepIncrement.Value}");
-            //SerialSend($"s{ctl.BaseOffsetStepIncrement}");
+            SendSerialLine($"c{ctl.ChannelIndex}");
+            SendSerialLine($"m{ctl.MinFrequency.Value}");
+            SendSerialLine($"M{ctl.MaxFrequency.Value}");
+            SendSerialLine($"p{ctl.CorrelationDipPercent.Value}");
+            SendSerialLine($"g{ctl.GcfStep.Value}");
+            SendSerialLine($"o{ctl.BaseOffsetStep.Value}");
+            SendSerialLine($"s{ctl.BaseOffsetStepIncrement.Value}");
+            SendSerialLine($"x{(ctl.DetailedSearchEnabled ? 1 : 0)}");
         }
 
         private void MainForm_KeyDown(object sender, KeyEventArgs e)

@@ -17,8 +17,8 @@ namespace TunerSimulator
             InitializeComponent();
         }
 
-        public delegate void ValueChangedDelegate();
-        public event ValueChangedDelegate ValueChanged;
+        //public delegate void ValueChangedDelegate();
+        public event EventHandler ValueChanged;
 
         public int Value
         {
@@ -39,7 +39,7 @@ namespace TunerSimulator
             var evt = ValueChanged;
             if (evt != null)
             {
-                evt();
+                evt(sender, e);
             }
         }
     }

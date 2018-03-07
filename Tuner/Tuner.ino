@@ -1907,37 +1907,62 @@ public:
 
 		while(1)
 		{
-            while (Serial.available())
-            {
-				//DEFAULT_PRINT->print("#"); DEFAULT_PRINT->print(Serial.available()); Ln();
-				char command = Serial.read();
-                switch (command)
-                {
-                    case 'I': g_dumpOnNullReading = true; break;
-                    case 'i': g_dumpOnNullReading = false; break;
-                    case 'f': g_dumpBelowFrequency = Serial.parseFloat(); break;
+			if (Serial.available())
+			{
+				while (Serial.available())
+				{
+					//DEFAULT_PRINT->print("#"); DEFAULT_PRINT->print(Serial.available()); Ln();
+					char command = Serial.read();
+					char peek = Serial.peek();
+					DEFAULT_PRINT->print("#read command: "); DEFAULT_PRINT->print(command); Ln();
+					DEFAULT_PRINT->print("#next character: "); DEFAULT_PRINT->print(peek); Ln();
+					switch (command)
+					{
+					case 'I': g_dumpOnNullReading = true; break;
+					case 'i': g_dumpOnNullReading = false; break;
+					case 'f': g_dumpBelowFrequency = Serial.parseInt(); break;
 					case 'c': activeChannelIndex = Serial.parseInt(); break;
-					case 'm': m_channels[activeChannelIndex].m_minFrequency = Serial.parseInt(); break;
-					case 'M': m_channels[activeChannelIndex].m_maxFrequency = Serial.parseInt(); break;
+					case 'm': m_channels[activeChannelIndex].m_minFrequency = max(Serial.parseInt(), ABSOLUTE_MIN_FREQUENCY); break;
+					case 'M': m_channels[activeChannelIndex].m_maxFrequency = min(Serial.parseInt(), ABSOLUTE_MAX_FREQUENCY); break;
 					case 'p': m_channels[activeChannelIndex].m_correlationDipThresholdPercent = Serial.parseInt(); break;
 					case 'g': m_channels[activeChannelIndex].m_gcfStep = max(Serial.parseInt(), 1); break;
 					case 'o': m_channels[activeChannelIndex].m_baseOffsetStep = max(Serial.parseInt(), 1); break;
 					case 's': m_channels[activeChannelIndex].m_baseOffsetStepIncrement = Serial.parseInt(); break;
 					case 'x': m_channels[activeChannelIndex].m_enableDetailedSearch = (Serial.parseInt() != 0); break;
 					case 'd': g_dumpMode = Serial.parseInt(); break;
+					case 'e':
+					{
+						int i = Serial.parseInt();
+						DEFAULT_PRINT->print("e");
+						DEFAULT_PRINT->print(i);
+						Ln();
+					}
+					break;
 					case '\n': break;
-                }
+					}
 
-				DEFAULT_PRINT->print("#");
-				DEFAULT_PRINT->print(command); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-				DEFAULT_PRINT->print(activeChannelIndex); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-				DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_minFrequency); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-				DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_maxFrequency); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-				DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_correlationDipThresholdPercent); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-				DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_gcfStep); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-				DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_baseOffsetStep); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-				DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_baseOffsetStepIncrement);
-				Ln();
+					DEFAULT_PRINT->print("#");
+					DEFAULT_PRINT->print(command); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(activeChannelIndex); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_minFrequency); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_maxFrequency); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_correlationDipThresholdPercent); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_gcfStep); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_baseOffsetStep); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_baseOffsetStepIncrement);
+					Ln();
+
+					// Indicate that we're ready for a command
+					DEFAULT_PRINT->print("c"); Ln();
+
+					// Give a little time to react in case the host wants to send multiple commands in a row
+					delay(25);
+				}
+			}
+			else
+			{
+				// Nothing received - we are ready for more
+				DEFAULT_PRINT->print("c"); Ln();
 			}
 
 			//DEFAULT_PRINT->print("#Left input loop"); Ln();
@@ -2092,6 +2117,7 @@ public:
 			//PrintStringInt("numCoarseCorrelations", numCoarseCorrelations); DEFAULT_PRINT->print("   "); Ln();
 			//PrintStringInt("numFineCorrelations", numFineCorrelations); DEFAULT_PRINT->print("   "); Ln();
 			//PrintStringFloat("Instant freq", instantFrequency); Ln();
+			DEFAULT_PRINT->print('r');
 			PrintFloat(instantFrequency); Serial.print(COMMA_SEPARATOR);
             PrintFloat(minSignalFrequency); Serial.print(COMMA_SEPARATOR);
             PrintFloat(maxSignalFrequency); Serial.print(COMMA_SEPARATOR);

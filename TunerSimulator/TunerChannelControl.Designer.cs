@@ -35,6 +35,7 @@
             this.MaxFrequency = new TunerSimulator.IntegerTextBox();
             this.MinFrequency = new TunerSimulator.IntegerTextBox();
             this.lblChannelName = new System.Windows.Forms.Label();
+            this.chkDetailedSearch = new System.Windows.Forms.CheckBox();
             this.SuspendLayout();
             // 
             // CorrelationDipPercent
@@ -44,7 +45,7 @@
             this.CorrelationDipPercent.Size = new System.Drawing.Size(100, 35);
             this.CorrelationDipPercent.TabIndex = 0;
             this.CorrelationDipPercent.Value = 0;
-            this.CorrelationDipPercent.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
+            this.CorrelationDipPercent.ValueChanged += new System.EventHandler(this.OnConfigurationChanged);
             // 
             // GcfStep
             // 
@@ -53,7 +54,7 @@
             this.GcfStep.Size = new System.Drawing.Size(100, 35);
             this.GcfStep.TabIndex = 1;
             this.GcfStep.Value = 0;
-            this.GcfStep.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
+            this.GcfStep.ValueChanged += new System.EventHandler(this.OnConfigurationChanged);
             // 
             // BaseOffsetStep
             // 
@@ -62,7 +63,7 @@
             this.BaseOffsetStep.Size = new System.Drawing.Size(100, 35);
             this.BaseOffsetStep.TabIndex = 2;
             this.BaseOffsetStep.Value = 0;
-            this.BaseOffsetStep.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
+            this.BaseOffsetStep.ValueChanged += new System.EventHandler(this.OnConfigurationChanged);
             // 
             // BaseOffsetStepIncrement
             // 
@@ -71,7 +72,7 @@
             this.BaseOffsetStepIncrement.Size = new System.Drawing.Size(100, 35);
             this.BaseOffsetStepIncrement.TabIndex = 3;
             this.BaseOffsetStepIncrement.Value = 0;
-            this.BaseOffsetStepIncrement.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
+            this.BaseOffsetStepIncrement.ValueChanged += new System.EventHandler(this.OnConfigurationChanged);
             // 
             // MaxFrequency
             // 
@@ -80,7 +81,7 @@
             this.MaxFrequency.Size = new System.Drawing.Size(100, 35);
             this.MaxFrequency.TabIndex = 4;
             this.MaxFrequency.Value = 0;
-            this.MaxFrequency.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
+            this.MaxFrequency.ValueChanged += new System.EventHandler(this.OnConfigurationChanged);
             // 
             // MinFrequency
             // 
@@ -89,7 +90,7 @@
             this.MinFrequency.Size = new System.Drawing.Size(100, 35);
             this.MinFrequency.TabIndex = 5;
             this.MinFrequency.Value = 0;
-            this.MinFrequency.TextChanged += new System.EventHandler(this.OnConfigurationChanged);
+            this.MinFrequency.ValueChanged += new System.EventHandler(this.OnConfigurationChanged);
             // 
             // lblChannelName
             // 
@@ -100,10 +101,21 @@
             this.lblChannelName.TabIndex = 6;
             this.lblChannelName.Text = "CHX";
             // 
+            // chkDetailedSearch
+            // 
+            this.chkDetailedSearch.AutoSize = true;
+            this.chkDetailedSearch.Location = new System.Drawing.Point(725, 6);
+            this.chkDetailedSearch.Name = "chkDetailedSearch";
+            this.chkDetailedSearch.Size = new System.Drawing.Size(28, 27);
+            this.chkDetailedSearch.TabIndex = 7;
+            this.chkDetailedSearch.UseVisualStyleBackColor = true;
+            this.chkDetailedSearch.CheckedChanged += new System.EventHandler(this.OnConfigurationChanged);
+            // 
             // TunerChannelControl
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(14F, 29F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
+            this.Controls.Add(this.chkDetailedSearch);
             this.Controls.Add(this.lblChannelName);
             this.Controls.Add(this.MinFrequency);
             this.Controls.Add(this.MaxFrequency);
@@ -112,7 +124,7 @@
             this.Controls.Add(this.GcfStep);
             this.Controls.Add(this.CorrelationDipPercent);
             this.Name = "TunerChannelControl";
-            this.Size = new System.Drawing.Size(723, 40);
+            this.Size = new System.Drawing.Size(765, 40);
             this.Load += new System.EventHandler(this.TunerChannelControl_Load);
             this.ResumeLayout(false);
             this.PerformLayout();
@@ -128,5 +140,6 @@
         public TunerSimulator.IntegerTextBox MaxFrequency;
         public TunerSimulator.IntegerTextBox MinFrequency;
         private System.Windows.Forms.Label lblChannelName;
+        private System.Windows.Forms.CheckBox chkDetailedSearch;
     }
 }

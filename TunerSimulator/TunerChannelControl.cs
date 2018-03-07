@@ -15,6 +15,17 @@ namespace TunerSimulator
         //public delegate void ConfigurationChangedDelegate();
         public event EventHandler ConfigurationChanged;
         public int ChannelIndex { get; set; }
+        public bool DetailedSearchEnabled
+        {
+            get
+            {
+                return chkDetailedSearch.Checked;
+            }
+            set
+            {
+                chkDetailedSearch.Checked = value;
+            }
+        }
 
         private bool m_changesSuspended = false;
         public bool SuspendChanges
