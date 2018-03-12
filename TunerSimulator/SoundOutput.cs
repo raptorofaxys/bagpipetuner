@@ -62,6 +62,8 @@ namespace TunerSimulator
 
         public float DesiredFrequency;
 
+        public float Volume = 1.0f;
+
         public float SampleCursor { get; private set; }
 
         public void RandomizePosition()
@@ -94,7 +96,7 @@ namespace TunerSimulator
 
                     for (var i = 0; i < sampleCount; ++i, SampleCursor += samplingRatio)
                     {
-                        buffer[offset + i] = GetSample(SampleCursor);
+                        buffer[offset + i] = GetSample(SampleCursor) * Volume;
                     }
                 }
                 else
@@ -136,6 +138,18 @@ namespace TunerSimulator
             }
         }
 
+        public float Volume
+        {
+            get
+            {
+                return m_provider.Volume;
+            }
+            set
+            {
+                m_provider.Volume = value;
+            }
+        }
+
         BufferResamplerProvider m_provider = new BufferResamplerProvider();
         WaveOut m_waveOut;
 
@@ -149,7 +163,7 @@ namespace TunerSimulator
             {
                 var caps = WaveOut.GetCapabilities(i);
                 Console.WriteLine("{0}: {1}", i, caps.ProductName);
-                if (caps.ProductName.Contains("3/4"))
+                if (caps.ProductName.Contains("5/6"))
                 {
                     outputNumber = i;
                 }
@@ -157,7 +171,7 @@ namespace TunerSimulator
 
             if (outputNumber < 0)
             {
-                Console.WriteLine("Unable to locate Saffire 3/4 output; defaulting to output 0");
+                Console.WriteLine("Unable to locate correct output; defaulting to output 0");
                 outputNumber = 0;
 
                 if (WaveOut.DeviceCount < 1)

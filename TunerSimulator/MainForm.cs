@@ -13,7 +13,7 @@ namespace TunerSimulator
 {
     public partial class MainForm : Form
     {
-        bool m_serialEnabled = true;
+        bool m_serialEnabled = false;
 
         bool m_closing = false;
         Task m_audioTask;
@@ -48,6 +48,7 @@ namespace TunerSimulator
             public float MaxSignalFrequency;
             public float MinSignalAmplitude;
             public float MaxSignalAmplitude;
+            public long TotalMs;
         }
 
         Queue<TunerReading> m_tunerReadingQueue = new Queue<TunerReading>();
@@ -126,7 +127,6 @@ namespace TunerSimulator
             tunerChannelControl1.BaseOffsetStepIncrement.Value = 2;
             tunerChannelControl1.DetailedSearchEnabled = true;
             tunerChannelControl1.SuspendChanges = false;
-            return;
 
             const int tenorDroneFreq = 239;
             tunerChannelControl2.SuspendChanges = true;
@@ -212,10 +212,13 @@ namespace TunerSimulator
                 tr.MinSignalAmplitude,
                 tr.MaxSignalAmplitude,
                 SPINNER[m_spinnerIndex]);
+
             lblReading.ForeColor = IsReadingValid(m_samplePlayback.Frequency, tr) ? Color.DarkGreen
                 : ((tr.SignalFrequency >= 0.0f) ? Color.DarkRed
                 : (tr.MaxSignalAmplitude - tr.MinSignalAmplitude > 20.0f) ? Color.Black
                 : Color.DarkGray);
+
+            lblTiming.Text = string.Format("{0} ms", tr.TotalMs);
 
             m_spinnerIndex = (m_spinnerIndex + 1) % SPINNER.Length;
         }
@@ -376,18 +379,21 @@ namespace TunerSimulator
             m_bagpipeOutputs[0].Sample = m_samples[0];
             m_bagpipeOutputs[0].DesiredFrequency = m_samples[0].Frequency;
             m_bagpipeOutputs[0].RandomizePosition();
+            m_bagpipeOutputs[0].Volume = 0.7f;
             m_bagpipeOutputs[0].Start();
 
             m_bagpipeOutputs[1] = new SoundOutput();
             m_bagpipeOutputs[1].Sample = m_samples[1];
             m_bagpipeOutputs[1].DesiredFrequency = m_samples[1].Frequency;
             m_bagpipeOutputs[1].RandomizePosition();
+            m_bagpipeOutputs[1].Volume = 0.7f;
             m_bagpipeOutputs[1].Start();
 
             m_bagpipeOutputs[2] = new SoundOutput();
             m_bagpipeOutputs[2].Sample = m_samples[1];
             m_bagpipeOutputs[2].DesiredFrequency = m_samples[1].Frequency + 1;
             m_bagpipeOutputs[2].RandomizePosition();
+            m_bagpipeOutputs[2].Volume = 0.7f;
             m_bagpipeOutputs[2].Start();
 
             m_bagpipeOutputs[3] = new SoundOutput();
@@ -534,6 +540,8 @@ namespace TunerSimulator
                 return;
             }
 
+            Console.WriteLine("(raw: \"{0}\")", line);
+
             char lineType = line[0];
             line = line.Substring(1);
 
@@ -542,7 +550,7 @@ namespace TunerSimulator
                 // If we got any type of line that is not a comment, flush out the comment buffer
                 if (!string.IsNullOrEmpty(m_commentBuffer))
                 {
-                    Console.Write(string.Concat(m_commentBuffer.Split('\n').Select(l => string.Format("#{0}\n", l))));
+                    Console.Write(string.Concat(m_commentBuffer.Trim().Split('\n').Select(l => string.Format("#{0}\n", l))));
                     //Console.WriteLine(string.Format("\"{0}\"", commentBuffer));
                     //Console.Out.Flush();
 
@@ -559,13 +567,14 @@ namespace TunerSimulator
                     {
                         var reading = new TunerReading();
                         var values = line.Split(',');
-                        if (values.Length == 5)
+                        if (values.Length == 6)
                         {
                             float.TryParse(values[0], out reading.SignalFrequency);
                             float.TryParse(values[1], out reading.MinSignalFrequency);
                             float.TryParse(values[2], out reading.MaxSignalFrequency);
                             float.TryParse(values[3], out reading.MinSignalAmplitude);
                             float.TryParse(values[4], out reading.MaxSignalAmplitude);
+                            long.TryParse(values[5], out reading.TotalMs);
                             EnqueueTunerReading(reading);
                             BeginInvoke((Action)(() => OnTunerReading(reading)));
                             //Console.WriteLine("Tuner frequency: {0} (raw: {1})", reading.SignalFrequency, line);
@@ -617,7 +626,7 @@ namespace TunerSimulator
                 m_serialSendBuffer.Enqueue(toSend + "\n");
 
                 ++m_serialSendCounter;
-                m_serialSendBuffer.Enqueue(string.Format("e{0}\n", m_serialSendCounter));
+                //m_serialSendBuffer.Enqueue(string.Format("e{0}\n", m_serialSendCounter));
 
                 //Console.WriteLine("({0})", toSend);
             }
@@ -723,6 +732,7 @@ namespace TunerSimulator
         private void tunerChannelControl_ConfigurationChanged(object sender, EventArgs e)
         {
             var ctl = (TunerChannelControl)sender;
+            SendSerialLine($"l1");
             SendSerialLine($"c{ctl.ChannelIndex}");
             SendSerialLine($"m{ctl.MinFrequency.Value}");
             SendSerialLine($"M{ctl.MaxFrequency.Value}");
@@ -731,6 +741,7 @@ namespace TunerSimulator
             SendSerialLine($"o{ctl.BaseOffsetStep.Value}");
             SendSerialLine($"s{ctl.BaseOffsetStepIncrement.Value}");
             SendSerialLine($"x{(ctl.DetailedSearchEnabled ? 1 : 0)}");
+            SendSerialLine($"l0");
         }
 
         private void MainForm_KeyDown(object sender, KeyEventArgs e)

@@ -1053,7 +1053,7 @@ public:
 			maxFrequency = -1.0f;
 
 			//DEFAULT_PRINT->print("DetermineSignalPitch()"); Ln();
-			static int const AMPLITUDE_THRESHOLD = 30;
+			static int const AMPLITUDE_THRESHOLD = 40;
 			
 			DEBUG_PRINT_STATEMENTS(Serial.write("DetermineSignalPitch()"); Ln(););
 
@@ -1398,7 +1398,12 @@ public:
 				break;
 			}
 
-			float result = (bestOffset != ~0)  ? GetFrequencyForOffsetFixed(bestOffset) : -2.0f;
+			if (bestOffset == ~0)
+			{
+				bestOffset = (minBestOffset + maxBestOffset) / 2;
+			}
+
+			float result = GetFrequencyForOffsetFixed(bestOffset);
 			minFrequency = GetFrequencyForOffsetFixed(maxBestOffset);
 			maxFrequency = GetFrequencyForOffsetFixed(minBestOffset);
 
@@ -1875,7 +1880,9 @@ public:
 
 	void Go()
 	{
-		DEBUG_PRINT_STATEMENTS(Serial.write("Initializing..."); Ln(););
+        DEFAULT_PRINT->print("#Tuner start"); Ln();
+
+        DEBUG_PRINT_STATEMENTS(Serial.write("Initializing..."); Ln(););
 
 		//{
 		//	DEFAULT_PRINT->print("#");
@@ -1909,40 +1916,68 @@ public:
 		{
 			if (Serial.available())
 			{
-				while (Serial.available())
+				bool locked = false;
+				while (Serial.available() || locked)
 				{
 					//DEFAULT_PRINT->print("#"); DEFAULT_PRINT->print(Serial.available()); Ln();
+					while (locked && !Serial.available())
+					{
+					}
+
 					char command = Serial.read();
-					char peek = Serial.peek();
-					DEFAULT_PRINT->print("#read command: "); DEFAULT_PRINT->print(command); Ln();
-					DEFAULT_PRINT->print("#next character: "); DEFAULT_PRINT->print(peek); Ln();
+					
+					int value = 0;
+					if (command != '\n')
+					{
+						long startMs = millis();
+						value = Serial.parseInt();
+						long endMs = millis();
+						if (endMs - startMs > 500)
+						{
+							DEFAULT_PRINT->print("#long parseInt on command: "); Ln();
+						}
+					}
+
+					char newLine = Serial.read();
+					if (newLine != '\n')
+					{
+						DEFAULT_PRINT->print("#WARNING: BAD SYNC"); Ln();
+					}
+
+					// This command is done. Indicate that we're ready for another one.
+					DEFAULT_PRINT->print("c"); Ln();
+					
+					DEFAULT_PRINT->print("#read command: "); DEFAULT_PRINT->print(command); DEFAULT_PRINT->print("("); DEFAULT_PRINT->print(static_cast<int>(command)); DEFAULT_PRINT->print(")"); Ln();
+					DEFAULT_PRINT->print("#value: "); DEFAULT_PRINT->print(value); Ln(); //where is all the echo output?
 					switch (command)
 					{
+					case 'l': locked = (value != 0); break;
 					case 'I': g_dumpOnNullReading = true; break;
 					case 'i': g_dumpOnNullReading = false; break;
-					case 'f': g_dumpBelowFrequency = Serial.parseInt(); break;
-					case 'c': activeChannelIndex = Serial.parseInt(); break;
-					case 'm': m_channels[activeChannelIndex].m_minFrequency = max(Serial.parseInt(), ABSOLUTE_MIN_FREQUENCY); break;
-					case 'M': m_channels[activeChannelIndex].m_maxFrequency = min(Serial.parseInt(), ABSOLUTE_MAX_FREQUENCY); break;
-					case 'p': m_channels[activeChannelIndex].m_correlationDipThresholdPercent = Serial.parseInt(); break;
-					case 'g': m_channels[activeChannelIndex].m_gcfStep = max(Serial.parseInt(), 1); break;
-					case 'o': m_channels[activeChannelIndex].m_baseOffsetStep = max(Serial.parseInt(), 1); break;
-					case 's': m_channels[activeChannelIndex].m_baseOffsetStepIncrement = Serial.parseInt(); break;
-					case 'x': m_channels[activeChannelIndex].m_enableDetailedSearch = (Serial.parseInt() != 0); break;
-					case 'd': g_dumpMode = Serial.parseInt(); break;
+					case 'f': g_dumpBelowFrequency = value; break;
+					case 'c': activeChannelIndex = value; break;
+					case 'm': m_channels[activeChannelIndex].m_minFrequency = max(value, ABSOLUTE_MIN_FREQUENCY); break;
+					case 'M': m_channels[activeChannelIndex].m_maxFrequency = min(value, ABSOLUTE_MAX_FREQUENCY); break;
+					case 'p': m_channels[activeChannelIndex].m_correlationDipThresholdPercent = value; break;
+					case 'g': m_channels[activeChannelIndex].m_gcfStep = max(value, 1); break;
+					case 'o': m_channels[activeChannelIndex].m_baseOffsetStep = max(value, 1); break;
+					case 's': m_channels[activeChannelIndex].m_baseOffsetStepIncrement = value; break;
+					case 'x': m_channels[activeChannelIndex].m_enableDetailedSearch = (value != 0); break;
+                    case 'd': g_dumpMode = static_cast<DumpMode::Type>(value); break;
 					case 'e':
 					{
-						int i = Serial.parseInt();
 						DEFAULT_PRINT->print("e");
-						DEFAULT_PRINT->print(i);
+						DEFAULT_PRINT->print(value);
 						Ln();
 					}
 					break;
-					case '\n': break;
+					case '\n':
+						// In principle this should not occur
+						DEFAULT_PRINT->print("#WARNING: STANDALONE NEWLINE"); Ln();
+						break;
 					}
 
-					DEFAULT_PRINT->print("#");
-					DEFAULT_PRINT->print(command); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+					DEFAULT_PRINT->print("#state ");
 					DEFAULT_PRINT->print(activeChannelIndex); DEFAULT_PRINT->print(COMMA_SEPARATOR);
 					DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_minFrequency); DEFAULT_PRINT->print(COMMA_SEPARATOR);
 					DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_maxFrequency); DEFAULT_PRINT->print(COMMA_SEPARATOR);
@@ -1952,11 +1987,8 @@ public:
 					DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_baseOffsetStepIncrement);
 					Ln();
 
-					// Indicate that we're ready for a command
-					DEFAULT_PRINT->print("c"); Ln();
-
 					// Give a little time to react in case the host wants to send multiple commands in a row
-					delay(25);
+					//delay(25);
 				}
 			}
 			else
@@ -2031,7 +2063,9 @@ public:
 			float maxSignalFrequency = -1.0f;
             int signalMin = 0;
             int signalMax = 0;
+			long dspTotalMs = -millis();
 			float instantFrequency = m_channels[0].DetermineSignalPitch(minSignalFrequency, maxSignalFrequency, signalMin, signalMax);
+			dspTotalMs += millis();
 #if FAKE_FREQUENCY
 			static float t = 0.0f;
 			t += 0.001f;
@@ -2121,8 +2155,9 @@ public:
 			PrintFloat(instantFrequency); Serial.print(COMMA_SEPARATOR);
             PrintFloat(minSignalFrequency); Serial.print(COMMA_SEPARATOR);
             PrintFloat(maxSignalFrequency); Serial.print(COMMA_SEPARATOR);
-            Serial.print(signalMin); Serial.print(COMMA_SEPARATOR);
-            Serial.print(signalMax); Ln();
+			Serial.print(signalMin); Serial.print(COMMA_SEPARATOR);
+			Serial.print(signalMax); Serial.print(COMMA_SEPARATOR);
+			Serial.print(dspTotalMs); Ln();
 			//Serial.print("#Line 1"); Ln();
 			//Serial.print("#Line 2"); Ln();
 			//Serial.print("#Line 3"); Ln();
