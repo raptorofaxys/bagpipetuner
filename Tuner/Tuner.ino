@@ -717,7 +717,8 @@ float g_noteSemitoneRatio[] =
 #endif
 
 typedef int Fixed;
-static int const FIXED_SHIFT = 5; // @TODO: can we bump this up to 6? where is the issue? (2*6=12 => 4 bits left for integer portion)
+typedef long DoubleFixed;
+static int const FIXED_SHIFT = 6; // @TODO: can we bump this up to 6? where is the issue? (2*6=12 => 4 bits left for integer portion during a multiply)
 static int const FIXED_ONE = (1 << FIXED_SHIFT);
 static int const FRAC_MASK = (1 << FIXED_SHIFT) - 1;
 //static int const FIXED_SHIFT_HI = 8 - FIXED_SHIFT;
@@ -1325,9 +1326,9 @@ public:
 				int iterationCount = 0;
 				for (; iterationCount < 100; ++iterationCount)
 				{
-					Fixed lowOffsetOption = (2 * lowOffset + highOffset) / 3;
+					Fixed lowOffsetOption = (2 * static_cast<DoubleFixed>(lowOffset) + highOffset) / 3;
 					unsigned long lowGcfOption = GetCorrelationFactorFixed(lowOffsetOption, maxSamples, 2);
-					Fixed highOffsetOption = (lowOffset + 2 * highOffset) / 3;
+					Fixed highOffsetOption = (lowOffset + 2 * static_cast<DoubleFixed>(highOffset)) / 3;
 					unsigned long highGcfOption = GetCorrelationFactorFixed(highOffsetOption, maxSamples, 2);
 					
 					//DEFAULT_PRINT->print("#");
@@ -1402,6 +1403,11 @@ public:
 			{
 				bestOffset = (minBestOffset + maxBestOffset) / 2;
 			}
+
+			//DEFAULT_PRINT->print("#"); DEFAULT_PRINT->print(bestOffset);
+			//DEFAULT_PRINT->print(COMMA_SEPARATOR); DEFAULT_PRINT->print(minBestOffset);
+			//DEFAULT_PRINT->print(COMMA_SEPARATOR); DEFAULT_PRINT->print(maxBestOffset);
+			//Ln();
 
 			float result = GetFrequencyForOffsetFixed(bestOffset);
 			minFrequency = GetFrequencyForOffsetFixed(maxBestOffset);
