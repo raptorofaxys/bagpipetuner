@@ -13,7 +13,7 @@ namespace TunerSimulator
 {
     public partial class MainForm : Form
     {
-        bool m_serialEnabled = false;
+        bool m_serialEnabled = true;
 
         bool m_closing = false;
         Task m_audioTask;
@@ -168,10 +168,15 @@ namespace TunerSimulator
                 tunerChannelControl1.MinFrequency.Value = 75;
                 tunerChannelControl1.MaxFrequency.Value = 1100;
                 tunerChannelControl1.CorrelationDipPercent.Value = 25;
-                tunerChannelControl1.GcfStep.Value = 2;
+                tunerChannelControl1.GcfStep.Value = 8;
                 tunerChannelControl1.BaseOffsetStep.Value = 4;
                 tunerChannelControl1.BaseOffsetStepIncrement.Value = 2;
                 tunerChannelControl1.SuspendChanges = false;
+            }
+
+            if (!m_serialEnabled)
+            {
+                lblReading.Text = "Serial transfer disabled";
             }
         }
 
