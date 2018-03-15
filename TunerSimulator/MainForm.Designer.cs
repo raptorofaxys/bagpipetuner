@@ -49,7 +49,7 @@
             this.lblBos = new System.Windows.Forms.Label();
             this.lblBosi = new System.Windows.Forms.Label();
             this.btnQuickTest = new System.Windows.Forms.Button();
-            this.lblTiming = new System.Windows.Forms.Label();
+            this.lblMisc = new System.Windows.Forms.Label();
             this.tunerChannelControl4 = new TunerSimulator.TunerChannelControl();
             this.tunerChannelControl3 = new TunerSimulator.TunerChannelControl();
             this.tunerChannelControl2 = new TunerSimulator.TunerChannelControl();
@@ -264,14 +264,14 @@
             this.btnQuickTest.UseVisualStyleBackColor = true;
             this.btnQuickTest.Click += new System.EventHandler(this.btnQuickTest_Click);
             // 
-            // lblTiming
+            // lblMisc
             // 
-            this.lblTiming.AutoSize = true;
-            this.lblTiming.Location = new System.Drawing.Point(1194, 20);
-            this.lblTiming.Name = "lblTiming";
-            this.lblTiming.Size = new System.Drawing.Size(119, 29);
-            this.lblTiming.TabIndex = 24;
-            this.lblTiming.Text = "XXXX ms";
+            this.lblMisc.AutoSize = true;
+            this.lblMisc.Location = new System.Drawing.Point(1194, 20);
+            this.lblMisc.Name = "lblMisc";
+            this.lblMisc.Size = new System.Drawing.Size(119, 29);
+            this.lblMisc.TabIndex = 24;
+            this.lblMisc.Text = "XXXX ms";
             // 
             // tunerChannelControl4
             // 
@@ -326,7 +326,7 @@
             this.AutoScaleDimensions = new System.Drawing.SizeF(14F, 29F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(1995, 1048);
-            this.Controls.Add(this.lblTiming);
+            this.Controls.Add(this.lblMisc);
             this.Controls.Add(this.btnQuickTest);
             this.Controls.Add(this.lblBosi);
             this.Controls.Add(this.lblBos);
@@ -385,6 +385,6 @@
         private System.Windows.Forms.Label lblBos;
         private System.Windows.Forms.Label lblBosi;
         private System.Windows.Forms.Button btnQuickTest;
-        private System.Windows.Forms.Label lblTiming;
+        private System.Windows.Forms.Label lblMisc;
     }
 }

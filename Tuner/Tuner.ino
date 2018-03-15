@@ -1044,7 +1044,7 @@ public:
 			return F_CPU / (floatOffset * CPU_CYCLES_PER_SAMPLE);
 		}
 
-		float DetermineSignalPitch(float& minFrequency, float& maxFrequency, int& signalMin, int& signalMax)
+		float DetermineSignalPitch(float& minFrequency, float& maxFrequency, int& signalMin, int& signalMax, int& maxCorrelationDipPercent)
 		{
 			int minSamples = SAMPLES_PER_SECOND / m_maxFrequency;
 			int maxSamples = SAMPLES_PER_SECOND / m_minFrequency;
@@ -1301,6 +1301,8 @@ public:
 				//  to through off the hunt for a minimum?
 				//@TODO: try searching for the minimum with various GCF steps and output the found minimum at the various steps;
 				// see how big we can make the step without affecting the accuracy of results
+
+				maxCorrelationDipPercent = (bestCorrelation * 100) / maxCorrelation;
 
 				if (!m_enableDetailedSearch)
 				{
@@ -2069,8 +2071,9 @@ public:
 			float maxSignalFrequency = -1.0f;
             int signalMin = 0;
             int signalMax = 0;
+			int maxCorrelationDipPercent = 0;
 			long dspTotalMs = -millis();
-			float instantFrequency = m_channels[0].DetermineSignalPitch(minSignalFrequency, maxSignalFrequency, signalMin, signalMax);
+			float instantFrequency = m_channels[0].DetermineSignalPitch(minSignalFrequency, maxSignalFrequency, signalMin, signalMax, maxCorrelationDipPercent);
 			dspTotalMs += millis();
 #if FAKE_FREQUENCY
 			static float t = 0.0f;
@@ -2163,7 +2166,9 @@ public:
             PrintFloat(maxSignalFrequency); Serial.print(COMMA_SEPARATOR);
 			Serial.print(signalMin); Serial.print(COMMA_SEPARATOR);
 			Serial.print(signalMax); Serial.print(COMMA_SEPARATOR);
-			Serial.print(dspTotalMs); Ln();
+			Serial.print(dspTotalMs); Serial.print(COMMA_SEPARATOR);
+			Serial.print(maxCorrelationDipPercent);
+			Ln();
 			//Serial.print("#Line 1"); Ln();
 			//Serial.print("#Line 2"); Ln();
 			//Serial.print("#Line 3"); Ln();

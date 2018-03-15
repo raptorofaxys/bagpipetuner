@@ -49,6 +49,7 @@ namespace TunerSimulator
             public float MinSignalAmplitude;
             public float MaxSignalAmplitude;
             public long TotalMs;
+            public int MaxCorrelationDipPercent;
         }
 
         Queue<TunerReading> m_tunerReadingQueue = new Queue<TunerReading>();
@@ -223,7 +224,7 @@ namespace TunerSimulator
                 : (tr.MaxSignalAmplitude - tr.MinSignalAmplitude > 20.0f) ? Color.Black
                 : Color.DarkGray);
 
-            lblTiming.Text = string.Format("{0} ms", tr.TotalMs);
+            lblMisc.Text = string.Format("{0} ms, {1} max CDP", tr.TotalMs, tr.MaxCorrelationDipPercent);
 
             m_spinnerIndex = (m_spinnerIndex + 1) % SPINNER.Length;
         }
@@ -572,7 +573,7 @@ namespace TunerSimulator
                     {
                         var reading = new TunerReading();
                         var values = line.Split(',');
-                        if (values.Length == 6)
+                        if (values.Length == 7)
                         {
                             float.TryParse(values[0], out reading.SignalFrequency);
                             float.TryParse(values[1], out reading.MinSignalFrequency);
@@ -580,6 +581,7 @@ namespace TunerSimulator
                             float.TryParse(values[3], out reading.MinSignalAmplitude);
                             float.TryParse(values[4], out reading.MaxSignalAmplitude);
                             long.TryParse(values[5], out reading.TotalMs);
+                            int.TryParse(values[6], out reading.MaxCorrelationDipPercent);
                             EnqueueTunerReading(reading);
                             BeginInvoke((Action)(() => OnTunerReading(reading)));
                             //Console.WriteLine("Tuner frequency: {0} (raw: {1})", reading.SignalFrequency, line);
