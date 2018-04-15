@@ -364,15 +364,17 @@ public:
         SelectADCChannel();
 
         DEBUG_PRINT_STATEMENTS(Serial.write("DetermineSignalPitch"); Ln(););
+        
         float minSignalFrequency = -1.0f;
         float maxSignalFrequency = -1.0f;
         int signalMin = 0;
         int signalMax = 0;
         int maxCorrelationDipPercent = 0;
+        
         long dspTotalMs = -millis();
         float instantFrequency = DetermineSignalPitch(minSignalFrequency, maxSignalFrequency, signalMin, signalMax, maxCorrelationDipPercent);
-
         dspTotalMs += millis();
+        
         DEBUG_PRINT_STATEMENTS(PrintStringFloat("instantFrequency", instantFrequency); Ln(););
 
         DEBUG_PRINT_STATEMENTS(Serial.write("GetMidiNoteIndexForFrequency"); Ln(););
@@ -407,7 +409,11 @@ public:
         Serial.print(signalMin); Serial.print(COMMA_SEPARATOR);
         Serial.print(signalMax); Serial.print(COMMA_SEPARATOR);
         Serial.print(dspTotalMs); Serial.print(COMMA_SEPARATOR);
-        Serial.print(maxCorrelationDipPercent);
+        Serial.print(maxCorrelationDipPercent); Serial.print(COMMA_SEPARATOR);
+        PrintFloat(m_filteredFrequency); Serial.print(COMMA_SEPARATOR);
+        PrintFloat(centerDisplayFrequency); Serial.print(COMMA_SEPARATOR);
+        PrintFloat(minDisplayFrequency); Serial.print(COMMA_SEPARATOR);
+        PrintFloat(maxDisplayFrequency); //Serial.print(COMMA_SEPARATOR);
         Ln();
     }
 

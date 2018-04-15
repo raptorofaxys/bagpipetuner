@@ -50,6 +50,12 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="TunerChannelDisplay.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="TunerChannelDisplay.Designer.cs">
+      <DependentUpon>TunerChannelDisplay.cs</DependentUpon>
+    </Compile>
     <Compile Include="IntegerTextBox.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -77,6 +83,9 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
+    <EmbeddedResource Include="TunerChannelDisplay.resx">
+      <DependentUpon>TunerChannelDisplay.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="IntegerTextBox.resx">
       <DependentUpon>IntegerTextBox.cs</DependentUpon>
     </EmbeddedResource>

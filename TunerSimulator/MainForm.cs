@@ -33,6 +33,8 @@ namespace TunerSimulator
         const string SPINNER = @"\|/-";
         int m_spinnerIndex;
 
+        TunerChannelDisplay[] m_channelDisplays;
+
         int m_serialSendCounter;
 
         string m_commentBuffer;
@@ -44,13 +46,17 @@ namespace TunerSimulator
         struct TunerReading
         {
             public int ChannelIndex;
-            public float SignalFrequency;
+            public float InstantFrequency;
             public float MinSignalFrequency;
             public float MaxSignalFrequency;
             public float MinSignalAmplitude;
             public float MaxSignalAmplitude;
             public long TotalMs;
             public int MaxCorrelationDipPercent;
+            public float FilteredFrequency;
+            public float CenterDisplayFrequency;
+            public float MinDisplayFrequency;
+            public float MaxDisplayFrequency;
         }
 
         Queue<TunerReading> m_tunerReadingQueue = new Queue<TunerReading>();
@@ -110,6 +116,8 @@ namespace TunerSimulator
         public MainForm()
         {
             InitializeComponent();
+
+            m_channelDisplays = new TunerChannelDisplay[] { tunerChannelDisplay1, tunerChannelDisplay2, tunerChannelDisplay3, tunerChannelDisplay4 };
 
             cmbDumpMode.SelectedIndex = 1;
         }
@@ -249,7 +257,7 @@ namespace TunerSimulator
             var sb = new StringBuilder();
             sb.AppendFormat("C{0}: ", tr.ChannelIndex);
             sb.AppendFormat("Instant Frequency: {0:###0.00} ({1:###0.00} - {2:###0.00})",
-                tr.SignalFrequency,
+                tr.InstantFrequency,
                 tr.MinSignalFrequency,
                 tr.MaxSignalFrequency);
             sb.AppendFormat("(expecting: {0}) [{1}, {2}]",
@@ -260,13 +268,23 @@ namespace TunerSimulator
             lblReading.Text = sb.ToString();
 
             lblReading.ForeColor = IsReadingValid(m_samplePlayback.Frequency, tr) ? Color.DarkGreen
-                : ((tr.SignalFrequency >= 0.0f) ? Color.DarkRed
+                : ((tr.InstantFrequency >= 0.0f) ? Color.DarkRed
                 : (tr.MaxSignalAmplitude - tr.MinSignalAmplitude > 20.0f) ? Color.Black
                 : Color.DarkGray);
 
             lblMisc.Text = string.Format("{0} ms, {1} max CDP", tr.TotalMs, tr.MaxCorrelationDipPercent);
 
             m_spinnerIndex = (m_spinnerIndex + 1) % SPINNER.Length;
+
+            if ((tr.ChannelIndex >= 0) && (tr.ChannelIndex < m_channelDisplays.Length))
+            {
+                var cd = m_channelDisplays[tr.ChannelIndex];
+                cd.InstantFrequency = tr.InstantFrequency;
+                cd.FilteredFrequency = tr.FilteredFrequency;
+                cd.CenterFrequency = tr.CenterDisplayFrequency;
+                cd.MinFrequency = tr.MinDisplayFrequency;
+                cd.MaxFrequency = tr.MaxDisplayFrequency;
+            }
         }
 
         void RunTunerTest(int testsPerPoint = 16, int substepsPerSample = 5)
@@ -293,7 +311,7 @@ namespace TunerSimulator
                 {
                     var result = TestPoint(m_soundOutput, s, frequency, testsPerPoint);
                     results.Add(result);
-                    Console.WriteLine("{0}: {1:0.00}% ({2})", frequency, result.PassRatio * 100.0f, string.Join(", ", result.Readings.Select(r => r.SignalFrequency)));
+                    Console.WriteLine("{0}: {1:0.00}% ({2})", frequency, result.PassRatio * 100.0f, string.Join(", ", result.Readings.Select(r => r.InstantFrequency)));
 
                     frequency *= frequencyStepMultiplier;
                 }
@@ -323,7 +341,7 @@ namespace TunerSimulator
             var rejectedReadings = 0;
             for (; rejectedReadings < numReadings;)
             {
-                if (DequeueTunerReading().SignalFrequency < 0)
+                if (DequeueTunerReading().InstantFrequency < 0)
                 {
                     ++rejectedReadings;
                 }
@@ -342,17 +360,17 @@ namespace TunerSimulator
 
         bool IsReadingValid(float targetFrequency, TunerReading tr)
         {
-            return IsReadingFrequencyValid(targetFrequency, tr.SignalFrequency)
+            return IsReadingFrequencyValid(targetFrequency, tr.InstantFrequency)
                 || ((targetFrequency >= tr.MinSignalFrequency) && (targetFrequency <= tr.MaxSignalFrequency));
         }
 
         bool IsReadingOctaveError(float targetFrequency, TunerReading tr)
         {
-            return IsReadingFrequencyValid(targetFrequency, tr.SignalFrequency * 2)
-                || IsReadingFrequencyValid(targetFrequency, tr.SignalFrequency * 3)
-                || IsReadingFrequencyValid(targetFrequency, tr.SignalFrequency * 4)
-                || IsReadingFrequencyValid(targetFrequency, tr.SignalFrequency * 5)
-                || IsReadingFrequencyValid(targetFrequency, tr.SignalFrequency * 6);
+            return IsReadingFrequencyValid(targetFrequency, tr.InstantFrequency * 2)
+                || IsReadingFrequencyValid(targetFrequency, tr.InstantFrequency * 3)
+                || IsReadingFrequencyValid(targetFrequency, tr.InstantFrequency * 4)
+                || IsReadingFrequencyValid(targetFrequency, tr.InstantFrequency * 5)
+                || IsReadingFrequencyValid(targetFrequency, tr.InstantFrequency * 6);
         }
 
         TestResult TestPoint(SoundOutput so, Sample sample, float frequency, int numReadings)
@@ -375,7 +393,7 @@ namespace TunerSimulator
                 var tr = DequeueTunerReading();
 
                 // Wait until our first non-rejected reading
-                if (!seenFirstValidReading && (tr.SignalFrequency < 0.0f))
+                if (!seenFirstValidReading && (tr.InstantFrequency < 0.0f))
                 {
                     //Console.WriteLine("(waiting until first valid reading to start sampling)");
                     continue;
@@ -385,7 +403,7 @@ namespace TunerSimulator
 
                 result.Readings.Add(tr);
 
-                if (tr.SignalFrequency >= 0.0f)
+                if (tr.InstantFrequency >= 0.0f)
                 {
                     ++result.NumValidReadings;
                     var valid = IsReadingValid(frequency, tr);
@@ -404,7 +422,7 @@ namespace TunerSimulator
                         }
                     }
 
-                    Console.WriteLine("Expected: {0,7:F2} got: {1,7:F2}  {2,7:F2}  ({3} - {4})", frequency, tr.SignalFrequency, valid ? " " : (octaveError ? "O" : "X"), tr.MinSignalFrequency, tr.MaxSignalFrequency);
+                    Console.WriteLine("Expected: {0,7:F2} got: {1,7:F2}  {2,7:F2}  ({3} - {4})", frequency, tr.InstantFrequency, valid ? " " : (octaveError ? "O" : "X"), tr.MinSignalFrequency, tr.MaxSignalFrequency);
                 }
                 else
                 {
@@ -613,16 +631,20 @@ namespace TunerSimulator
                     {
                         var reading = new TunerReading();
                         var values = line.Split(',');
-                        if (values.Length == 8)
+                        if (values.Length == 12)
                         {
                             int.TryParse(values[0], out reading.ChannelIndex);
-                            float.TryParse(values[1], out reading.SignalFrequency);
+                            float.TryParse(values[1], out reading.InstantFrequency);
                             float.TryParse(values[2], out reading.MinSignalFrequency);
                             float.TryParse(values[3], out reading.MaxSignalFrequency);
                             float.TryParse(values[4], out reading.MinSignalAmplitude);
                             float.TryParse(values[5], out reading.MaxSignalAmplitude);
                             long.TryParse(values[6], out reading.TotalMs);
                             int.TryParse(values[7], out reading.MaxCorrelationDipPercent);
+                            float.TryParse(values[8], out reading.FilteredFrequency);
+                            float.TryParse(values[9], out reading.CenterDisplayFrequency);
+                            float.TryParse(values[10], out reading.MinDisplayFrequency);
+                            float.TryParse(values[11], out reading.MaxDisplayFrequency);
                             EnqueueTunerReading(reading);
                             BeginInvoke((Action)(() => OnTunerReading(reading)));
                             //Console.WriteLine("Tuner frequency: {0} (raw: {1})", reading.SignalFrequency, line);
