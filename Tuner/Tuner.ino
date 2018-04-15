@@ -1,15 +1,18 @@
 /*
 
 Arduino chromatic tuner.
-2008-2017 Frederic Hamel
+2008-2018 Frederic Hamel
 
-As a modified version of the Arduino core library, the LiquidCrystal class is licensed under the LGPL.
-See attached license.
+This version of the code is meant for a bagpipe tuner designed by Matthew Beall. Compared to the original version:
+-it supports multiple input channels with channel-specific settings
+-it much lower latency
+-it has about double the precision over 2-3x the frequency range
+-it has no support for LCD or MIDI mode.
 
-The rest is released under the Attribution-NonCommercial 3.0 Unported Creative Commons license:
+This is released under the Attribution-NonCommercial 3.0 Unported Creative Commons license:
 http://creativecommons.org/licenses/by-nc/3.0/
 
-See the project writeup:
+See the original project writeup:
 http://deambulatorymatrix.blogspot.com/2010/11/digital-chromatic-guitar-tuner-2008.html.
 
 Note that this code was more or less hacked together in a marathon along with the building of the actual
@@ -86,12 +89,7 @@ extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
 //#define portInputRegister(P) ( (volatile uint8_t *)( pgm_read_byte( port_to_input_PGM + (P))) )
 
 #define ENABLE_STARTUP_MESSAGE 0
-#define ENABLE_PRINT 1
-#define ENABLE_LCD 0
 #define ENABLE_BUTTON_INPUTS 0
-#define PRINT_FREQUENCY_TO_SERIAL 1
-#define PRINT_FREQUENCY_TO_SERIAL_VT100 0
-#define FAKE_FREQUENCY 0
 #define ENABLE_DEBUG_PRINT_STATEMENTS 0
 //#define Serial _SERIAL_FAIL_
 
@@ -111,197 +109,9 @@ static int const kStatusPin = 13;
 static int const kStatusPin2 = 12;
 static int const kPitchDownButtonPin = 9;
 static int const kPitchUpButtonPin = 10;
-static int const kModeButtonPin = 11;
 
 #include <inttypes.h>
 #include "Print.h"
-
-#if ENABLE_LCD
-///////////////////////////////////////////////////////////////////////////////
-// LCD code.  This began as a straight copy of the Arduino LiquidCrystal library,
-// and it was tweaked afterwards for the MTC-S16205DFYHSAY.
-// Timings *should* still work for the HD44780, but this particular model
-// requires a bit of extra "convincing" on initialisation.
-///////////////////////////////////////////////////////////////////////////////
-
-static int const CHARACTER_WIDTH = 5;
-static int const CHARACTER_HEIGHT = 7;
-static int const DISPLAY_WIDTH = 16;
-static int const MAX_TICK = CHARACTER_WIDTH * (DISPLAY_WIDTH - 1);
-typedef char Glyph[CHARACTER_HEIGHT];
-typedef int WideGlyph[CHARACTER_HEIGHT];
-
-Glyph g_tickGlyph =
-{
-	0b00011111,
-	0b00011111,
-	0b00001110,
-	0b00001110,
-	0b00000100,
-	0b00000100,
-	0b00000100
-};
-static int const TICK_GLYPH = CHARACTER_WIDTH;
-static int const NOTE_GLYPH = TICK_GLYPH + 1; // wide
-
-class LiquidCrystal : public Print {
-public:
-  LiquidCrystal(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t);
-  LiquidCrystal(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t,
-    uint8_t, uint8_t, uint8_t, uint8_t);
-  void clear();
-  void home();
-  void setCursor(int, int); 
-  virtual size_t write(uint8_t);
-
-  void setCharacterGlyph(uint8_t character, Glyph g);
-  void setWideCharacterGlyph(uint8_t character, WideGlyph g);
-private:
-  void send(uint8_t, uint8_t);
-  void command(uint8_t);
-  
-  uint8_t _four_bit_mode;
-  uint8_t _rs_pin; // LOW: command.  HIGH: character.
-  uint8_t _rw_pin; // LOW: write to LCD.  HIGH: read from LCD.
-  uint8_t _enable_pin; // activated by a HIGH pulse.
-  uint8_t _data_pins[8];
-};
-
-LiquidCrystal::LiquidCrystal(uint8_t rs, uint8_t rw, uint8_t enable,
-  uint8_t d0, uint8_t d1, uint8_t d2, uint8_t d3) :
-  _four_bit_mode(1), _rs_pin(rs), _rw_pin(rw), _enable_pin(enable)
-{
-  _data_pins[0] = d0;
-  _data_pins[1] = d1;
-  _data_pins[2] = d2;
-  _data_pins[3] = d3; 
-  
-  pinMode(_rs_pin, OUTPUT);
-  pinMode(_rw_pin, OUTPUT);
-  pinMode(_enable_pin, OUTPUT);
-  
-  for (int i = 0; i < 4; i++)
-    pinMode(_data_pins[i], OUTPUT);
- 
-  delay(250);
-  command(0x28);  // function set: 4 bits, 1 line, 5x8 dots @fhamel: 2 lines for MTC-S16205DFYHSAY?
-  delay(15);
-  command(0x28);  // (again)
-  delay(15);
-  command(0x28);  // (again)
-  delay(15);
-  command(0x28);  // (again)
-  delay(15);
-  command(0x0C);  // display control: turn display on, cursor off, no blinking
-  delay(15);
-  command(0x0C);  // (again)
-  delay(15);
-  command(0x0C);  // (again)
-  delay(15);
-  command(0x0C);  // (again)
-  delay(15);
-  command(0x06);  // entry mode set: increment automatically, display shift, right shift
-  delay(15);
-  command(0x06);  // (again)
-  delay(15);
-  command(0x06);  // (again)
-  delay(15);
-  command(0x06);  // (again)
-  delay(15);
-  clear();
-  delay(15);
-}
-
-void LiquidCrystal::clear()
-{
-  command(0x01);  // clear display, set cursor position to zero
-  delayMicroseconds(2000);
-}
-
-void LiquidCrystal::home()
-{
-  command(0x02);  // set cursor position to zero
-  delayMicroseconds(2000);
-}
-
-// Moves the cursor around on the LCD.
-void LiquidCrystal::setCursor(int col, int row)
-{
-  int row_offsets[] = { 0x00, 0x40, 0x14, 0x54 };
-  command(0x80 | (col + row_offsets[row]));
-}
-
-// Customizes a single character glyph in the LCD's CGRAM.
-void LiquidCrystal::setCharacterGlyph(uint8_t characterIndex, Glyph g)
-{
-	// Index into the CGRAM, which is indexed with 3 MSB indicating glyph number and 3 LSB indicating row number.
-	// However, there is no need to reset the address every time, since the entry mode's advance bit applies here
-	// as well (i.e. the address autoincrements after each access).
-	command(0x40 | (characterIndex << 3));
-	for (int row = 0; row < CHARACTER_HEIGHT; ++row)
-	{
-		//command(0x40 | (characterIndex << 3) | row);
-		write(g[row]);
-	}
-	write(0);
-}
-
-// Customizes a set pair of custom character glyps in the LCD's CGRAM; used to render large note names which are
-// easier to read from afar.
-void LiquidCrystal::setWideCharacterGlyph(uint8_t characterIndex, WideGlyph g)
-{
-	command(0x40 | (characterIndex << 3));
-	for (int row = 0; row < CHARACTER_HEIGHT; ++row)
-	{
-		write(char((g[row] >> 5) & 0x1F));
-	}
-	write(0);
-	command(0x40 | ((characterIndex + 1) << 3));
-	for (int row = 0; row < CHARACTER_HEIGHT; ++row)
-	{
-		write(char(g[row] & 0x1F));
-	}
-	write(0);
-}
-
-void LiquidCrystal::command(uint8_t value) {
-  send(value, LOW);
-}
-
-size_t LiquidCrystal::write(uint8_t value) {
-  send(value, HIGH);
-  return 1;
-}
-
-void LiquidCrystal::send(uint8_t value, uint8_t mode) {
-  digitalWrite(_rs_pin, mode);
-  digitalWrite(_rw_pin, LOW);
-
-  if (_four_bit_mode) {
-    for (int i = 0; i < 4; i++) {
-      digitalWrite(_data_pins[i], (value >> (i + 4)) & 0x01);
-    }
-    
-    digitalWrite(_enable_pin, HIGH);
-    digitalWrite(_enable_pin, LOW);
-    
-    for (int i = 0; i < 4; i++) {
-      digitalWrite(_data_pins[i], (value >> i) & 0x01);
-    }
-
-    digitalWrite(_enable_pin, HIGH);
-    digitalWrite(_enable_pin, LOW);
-  } else {
-    for (int i = 0; i < 8; i++) {
-      digitalWrite(_data_pins[i], (value >> i) & 0x01);
-    }
-
-    digitalWrite(_enable_pin, HIGH);
-    digitalWrite(_enable_pin, LOW);
-  }
-}
-LiquidCrystal* g_lcd;
-#endif // #if ENABLE_LCD
 
 ///////////////////////////////////////////////////////////////////////////////
 // Utility stuff
@@ -330,13 +140,7 @@ int AvailableMemory()
 	return size;
 }
 
-#if ENABLE_PRINT
-
-#if ENABLE_LCD
-#define DEFAULT_PRINT g_lcd
-#else
 #define DEFAULT_PRINT (&Serial)
-#endif
 
 void Ln(Print* p = DEFAULT_PRINT)
 {
@@ -439,13 +243,8 @@ void PrintStringFloat(char const* s, float f, int decimals = 5, Print* p = DEFAU
 	PrintFloat(f, decimals);
 }
 
-#endif //ENABLE_PRINT
-
-//@HACK
+//@TODO: break all the utility stuff up into headers and move this include back to the top; the ScopeProfiler depends on print utilities
 #include "tuner_utils.h"
-
-//#define PROFILE_STATEMENT(count, msg, x) { unsigned long startMs = millis(); for (unsigned long i = 0; i < count; ++i) { x } unsigned long endMs = millis(); float timePerIteration = static_cast<float>(endMs - startMs) / count; PrintStringFloat(msg, timePerIteration); Ln(); }
-//#define PROFILE_STATEMENT(count, msg, x) { unsigned long startUs = micros(); for (unsigned long i = 0; i < count; ++i) { x } unsigned long endUs = micros(); double timePerIteration = static_cast<double>(endUs - startUs) / count; PrintStringFloat(msg, static_cast<float>(timePerIteration)); Ln(); }
 
 const int kDebounceMs = 50;
 
@@ -532,7 +331,6 @@ public:
 
 PushButton g_pitchDownButton(kPitchDownButtonPin);
 PushButton g_pitchUpButton(kPitchUpButtonPin);
-PushButton g_modeButton(kModeButtonPin);
 
 ///////////////////////////////////////////////////////////////////////////////
 // The Tuner
@@ -604,75 +402,6 @@ bool g_noteSharpSign[NUM_NOTES] =
 	false
 };
 
-#if ENABLE_LCD
-WideGlyph g_noteGlyphs[7] =
-{
-	{//   9876543210
-		0b0000110000,
-		0b0011111100,
-		0b0110000110,
-		0b0111111110,
-		0b0111111110,
-		0b0110000110,
-		0b0110000110
-	},
-	{
-		0b0111111000,
-		0b0111111100,
-		0b0110001100,
-		0b0111111110,
-		0b0110000110,
-		0b0111111110,
-		0b0111111110
-	},
-	{
-		0b0011111100,
-		0b0111111110,
-		0b0110000110,
-		0b0110000000,
-		0b0110000110,
-		0b0111111110,
-		0b0011111100
-	},
-	{
-		0b0111111000,
-		0b0111111100,
-		0b0110000110,
-		0b0110000110,
-		0b0110000110,
-		0b0111111100,
-		0b0111111000
-	},
-	{
-		0b0111111110,
-		0b0111111110,
-		0b0110000000,
-		0b0111111000,
-		0b0110000000,
-		0b0111111110,
-		0b0111111110
-	},
-	{
-		0b0111111110,
-		0b0111111110,
-		0b0110000000,
-		0b0111111000,
-		0b0110000000,
-		0b0110000000,
-		0b0110000000
-	},
-	{
-		0b0011111100,
-		0b0111111110,
-		0b0110000000,
-		0b0110001110,
-		0b0110000110,
-		0b0111111110,
-		0b0011111110
-	}
-};
-#endif // #if ENABLE_LCD
-
 #if (TEMPERAMENT == EQUAL_TEMPERAMENT)
 float const DEFAULT_A440 = 440.0f;
 #elif (TEMPERAMENT == JUST_TEMPERAMENT)
@@ -721,8 +450,6 @@ typedef long DoubleFixed;
 static int const FIXED_SHIFT = 6; // @TODO: can we bump this up to 6? where is the issue? (2*6=12 => 4 bits left for integer portion during a multiply)
 static int const FIXED_ONE = (1 << FIXED_SHIFT);
 static int const FRAC_MASK = (1 << FIXED_SHIFT) - 1;
-//static int const FIXED_SHIFT_HI = 8 - FIXED_SHIFT;
-//static int const FIXED_MASK_HI = ~((1 << FIXED_SHIFT_HI) - 1);
 #define FIXED_INT(x) int(x >> FIXED_SHIFT)
 #define FIXED_FRAC(x) int(x & FRAC_MASK)
 #define		I2FIXED(x) ((Fixed) ((x) << FIXED_SHIFT))
@@ -737,15 +464,6 @@ typedef union
 	float f;
 } FourByteUnion;
 STATIC_ASSERT(sizeof(unsigned long) == sizeof(float)); // verify that things match up for the above union
-
-namespace TunerMode
-{
-	enum Type
-	{
-		Tuner = 0,
-		Max
-	};
-}
 
 static int const PRESCALER = 0b00000101;
 static int const PRESCALER_DIVIDE = (1 << PRESCALER);
@@ -827,9 +545,6 @@ public:
             admux &= ~(0x0F);
             admux |= m_audioPin;
             ADMUX = admux;
-
-			// Disable other ADC channels (try to reduce noise?)
-			//DIDR0 = (0x3F ^ (1 << m_audioPin));
 		}
 
 		// This function requires proper setup in Tuner::Start() and SelectADCChannel()
@@ -841,23 +556,13 @@ public:
 
 			unsigned int result = ADCH;
 			sbi(ADCSRA, ADIF);
-			//PrintStringInt("ReadInput8BitsUnsigned", result); Ln();
 			return result;
 		}
 
 		int ReadInput8BitsSigned()
 		{
 			int result = ReadInput8BitsUnsigned() - 128;
-			//PrintStringInt("ReadInput8BitsSigned", result); Ln();
 			return result;
-		}
-
-		// Linearly interpolates between two 8-bit signed values.
-		char InterpolateChar_old(char a, char b, char tFrac)
-		{
-			int d = b - a;
-			//@TODO: test casting to char before the addition to save on the 16-bit add
-			return a + ((d * tFrac) >> FIXED_SHIFT);
 		}
 
 		// Linearly interpolates between two 8-bit signed values.
@@ -867,82 +572,11 @@ public:
 			return a + static_cast<char>((d * tFrac) >> FIXED_SHIFT);
 		}
 
-		//void __attribute__ ((noinline)) foo() 
-		//{
-		//x
-		//}
-
-		//attribute ((noinline)) void foo() { x }
-
-		//unsigned long __attribute__((noinline)) GetCorrelationFactorFixed_old(Fixed fixedOffset, int windowSize, int correlationStep)
-		//{
-		//	unsigned long result = 0;
-		//	int integer = FIXED_INT(fixedOffset);
-		//	int frac = FIXED_FRAC(fixedOffset);
-
-		//	// If we're in MIDI mode, lower the precision to gain speed.
-		//	//if (m_mode == TunerMode::Midi)
-		//	//{
-		//	//	correlationStep <<= 1;
-		//	//}
-
-		//	char* pA = &g_recordingBuffer[0];
-		//	char* pB = &g_recordingBuffer[integer];
-		//	char* pB2 = pB + 1;
-
-		//	//@OPTIMIZE: for B, move b2 into b, then indirect-read the new b2? might not make a difference
-		//	// No: we are skipping ahead by correlation step, which is usually well above 1, so we need to read both values anyway
-		//	for (int i = 0; i < windowSize; i += correlationStep, pA += correlationStep, pB += correlationStep, pB2 += correlationStep)
-		//	{
-		//		// Note this is done with 16-bit math; this is slower, but gives more precision. In tests, using 8-bit fixed-point
-		//		// math did not yield sufficient precision.
-		//		int a = *pA;
-		//		int b = InterpolateChar_old(*pB, *pB2, frac);
-		//		result += abs(b - a);
-		//	}
-		//	return result;
-		//}
-
-		//unsigned long __attribute__((noinline)) GetCorrelationFactorFixed(Fixed fixedOffset, int windowSize, int correlationStep)
-		//{
-		//	unsigned long result = 0;
-		//	int integer = FIXED_INT(fixedOffset);
-		//	int frac = FIXED_FRAC(fixedOffset);
-
-		//	// If we're in MIDI mode, lower the precision to gain speed.
-		//	//if (m_mode == TunerMode::Midi)
-		//	//{
-		//	//	correlationStep <<= 1;
-		//	//}
-
-		//	char* pA = &g_recordingBuffer[0];
-		//	char* pB = &g_recordingBuffer[integer];
-		//	char* pB2 = pB + 1;
-		//	char* pEndA = pA + windowSize;
-
-		//	for (; pA < pEndA; pA += correlationStep, pB += correlationStep, pB2 += correlationStep)
-		//	{
-		//		// Note this is done with 16-bit math; this is slower, but gives more precision. In tests, using 8-bit fixed-point
-		//		// math did not yield sufficient precision.
-		//		int a = *pA;
-		//		//@TODO: test doing this math on a char; does this require shifting all samples right by 1?
-		//		int b = InterpolateChar_old(*pB, *pB2, frac);
-		//		result += abs(b - a);
-		//	}
-		//	return result;
-		//}
-
-		unsigned long __attribute__((noinline)) GetCorrelationFactorFixed(Fixed fixedOffset, int windowSize, int correlationStep)
+		unsigned long /*__attribute__((noinline))*/ GetCorrelationFactorFixed(Fixed fixedOffset, int windowSize, int correlationStep)
 		{
 			unsigned long result = 0;
 			int integer = FIXED_INT(fixedOffset);
 			int frac = FIXED_FRAC(fixedOffset);
-
-			// If we're in MIDI mode, lower the precision to gain speed.
-			//if (m_mode == TunerMode::Midi)
-			//{
-			//	correlationStep <<= 1;
-			//}
 
 			char* pA = &g_recordingBuffer[0];
 			char* pB = &g_recordingBuffer[integer];
@@ -954,100 +588,11 @@ public:
 				// Note this is done with 16-bit math; this is slower, but gives more precision. In tests, using 8-bit fixed-point
 				// math did not yield sufficient precision.
 				int a = *pA;
-				//@TODO: test doing this math on a char; does this require shifting all samples right by 1?
-				//Answer: not any faster
 				int b = InterpolateChar(*pB, *pB2, frac);
 				result += abs(b - a);
 			}
 			return result;
 		}
-
-		//unsigned long __attribute__((noinline)) GetCorrelationFactorFixed3(Fixed fixedOffset, int windowSize, int correlationStep)
-		//{
-		//	unsigned long result = 0;
-		//	int integer = FIXED_INT(fixedOffset);
-		//	int frac = FIXED_FRAC(fixedOffset);
-
-		//	// If we're in MIDI mode, lower the precision to gain speed.
-		//	//if (m_mode == TunerMode::Midi)
-		//	//{
-		//	//	correlationStep <<= 1;
-		//	//}
-
-		//	char* pA = &g_recordingBuffer[0];
-		//	char* pB = &g_recordingBuffer[integer];
-		//	char* pB2 = pB + 1;
-
-		//	//@OPTIMIZE: for B, move b2 into b, then indirect-read the new b2? might not make a difference
-		//	// No: we are skipping ahead by correlation step, which is usually well above 1, so we need to read both values anyway
-		//	for (int i = 0; i < windowSize; i += correlationStep, pA += correlationStep, pB += correlationStep, pB2 += correlationStep)
-		//	{
-		//		// Note this is done with 16-bit math; this is slower, but gives more precision. In tests, using 8-bit fixed-point
-		//		// math did not yield sufficient precision.
-		//		int a = *pA;
-		//		int b = InterpolateChar(*pB, *pB2, frac);
-		//		result += abs(b - a);
-		//	}
-		//	return result;
-		//}
-
-		//unsigned long __attribute__((noinline)) GetCorrelationFactorFixed4(Fixed fixedOffset, int windowSize, int correlationStep)
-		//{
-		//	unsigned long result = 0;
-		//	int integer = FIXED_INT(fixedOffset);
-		//	int frac = FIXED_FRAC(fixedOffset);
-
-		//	// If we're in MIDI mode, lower the precision to gain speed.
-		//	//if (m_mode == TunerMode::Midi)
-		//	//{
-		//	//	correlationStep <<= 1;
-		//	//}
-
-		//	char* pA = &g_recordingBuffer[0];
-		//	char* pB = &g_recordingBuffer[integer];
-		//	char* pB2 = pB + 1;
-
-		//	//@OPTIMIZE: for B, move b2 into b, then indirect-read the new b2? might not make a difference
-		//	// No: we are skipping ahead by correlation step, which is usually well above 1, so we need to read both values anyway
-		//	for (int i = 0; i < windowSize; i += correlationStep, pA += correlationStep, pB += correlationStep, pB2 += correlationStep)
-		//	{
-		//		// Note this is done with 16-bit math; this is slower, but gives more precision. In tests, using 8-bit fixed-point
-		//		// math did not yield sufficient precision.
-		//		char a = *pA;
-		//		char b = InterpolateChar(*pB, *pB2, frac);
-		//		result += abs(b - a);
-		//	}
-		//	return result;
-		//}
-
-		//unsigned long GetCorrelationFactorPrime(unsigned long currentCorrellation, int numToDate, unsigned long sumToDate)
-		//{
-		//	//if (numToDate == 0)
-		//	//{
-		//	//	return FIXED_ONE;
-		//	//}
-		//	//else
-		//	//{
-		//		return ((currentCorrellation << FIXED_SHIFT) * numToDate) / sumToDate;
-		//	//}
-		//}
-
-		//unsigned long GetCorrelationFactorPrime2(unsigned long currentCorrelation, int numToDate, unsigned long sumToDate)
-		//{
-		//	// Here we don't care about the absolute value; we're just comparing values at various points on the curve to find a local minimum. The default fixed shift
-		//	// isn't quite large enough to produce values which will be meaningful when divided by the potentially large sumToDate, so we increase the just for this
-		//	// function.
-		//	//if (numToDate == 0)
-		//	//{
-		//	//	//return (1 << PRIME_SHIFT);
-		//	//	return 1;
-		//	//}
-		//	//else
-		//	//{
-		//		//return ((currentCorrelation << PRIME_SHIFT) * numToDate) / (sumToDate >> 8);
-		//		return (currentCorrelation * numToDate) / (sumToDate >> 8);
-		//	//}
-		//}
 
 		// Compute the frequency corresponding to a given a fixed-point offset into our sampling buffer (usually where
 		// the best/minimal autocorrelation was achieved).
@@ -1075,7 +620,6 @@ public:
 			signalMin = INT_MAX;
 			signalMax = INT_MIN;
 			int maxAmplitude = -1;
-			//for (int i = 0; i < BUFFER_SIZE; ++i)
 			for (int i = 0; i < bufferSize; ++i)
 			{
 				g_recordingBuffer[i] = ReadInput8BitsSigned();
@@ -1083,20 +627,6 @@ public:
 				signalMax = max(g_recordingBuffer[i], signalMax);
 				maxAmplitude = max(maxAmplitude, abs(signalMax - signalMin));
 			}
-
-			//DEFAULT_PRINT->print("DetermineSignalPitch() done sampling"); Ln();
-			//PrintStringInt("signalMin", signalMin); Ln();
-			//PrintStringInt("signalMax", signalMax); Ln();
-			//PrintStringInt("maxAmplitude", maxAmplitude); Ln();
-			//for (int i = 0; i < BUFFER_SIZE; ++i)
-			//{
-			//	DEFAULT_PRINT->print(static_cast<int>(g_recordingBuffer[i]));
-			//	if (i != BUFFER_SIZE - 1)
-			//	{
-			//		DEFAULT_PRINT->print(",");
-			//	}
-			//}
-			//Ln();
 
 			DEBUG_PRINT_STATEMENTS(
 			{
@@ -1123,6 +653,7 @@ public:
 			Fixed minBestOffset = ~0;
 			Fixed maxBestOffset = ~0;
 			Fixed bestOffset = ~0;
+            
             // Normally we only run once through the below code. This loop is only here in case we need to print the result of some computations. This is typically done when an abnormal result is obtained.
 			for (;;)
 			{
@@ -1145,55 +676,8 @@ public:
                         DEFAULT_PRINT->print("#");
                         DEFAULT_PRINT->print(static_cast<int>(g_recordingBuffer[i]));
                         Ln();
-                        //if (i != BUFFER_SIZE - 1)
-                        //{
-                        //	DEFAULT_PRINT->print(",");
-                        //}
                     }
-                    //Ln();
                 }
-
-				{
-					//const unsigned long iterations = 2000;
-
-					// Look at assembler output?
-					//DEFAULT_PRINT->print("#");
-					//PROFILE_STATEMENT_LINE({ GetCorrelationFactorFixed_old(m_gcfStep, maxSamples, m_gcfStep); });
-					//DEFAULT_PRINT->print("#");
-					//PROFILE_STATEMENT_LINE({ GetCorrelationFactorFixed(m_gcfStep, maxSamples, m_gcfStep); });
-					//DEFAULT_PRINT->print("#");
-					//PROFILE_STATEMENT_LINE({ GetCorrelationFactorFixed2(m_gcfStep, maxSamples, m_gcfStep); });
-					//DEFAULT_PRINT->print("#");
-					//PROFILE_STATEMENT_LINE({ GetCorrelationFactorFixed3(m_gcfStep, maxSamples, m_gcfStep); });
-					//DEFAULT_PRINT->print("#");
-					//PROFILE_STATEMENT_LINE({ GetCorrelationFactorFixed4(m_gcfStep, maxSamples, m_gcfStep); });
-					//DEFAULT_PRINT->print("#");
-					//PROFILE_STATEMENT_LINE({ useless += GetCorrelationFactorFixed_old(m_gcfStep, maxSamples, m_gcfStep); });
-					//DEFAULT_PRINT->print("#");
-					//PROFILE_STATEMENT_LINE({ useless += GetCorrelationFactorFixed(m_gcfStep, maxSamples, m_gcfStep); });
-					//DEFAULT_PRINT->print("#");
-					//PROFILE_STATEMENT_LINE({ useless += GetCorrelationFactorFixed2(m_gcfStep, maxSamples, m_gcfStep); });
-					//DEFAULT_PRINT->print("#");
-					//PROFILE_STATEMENT_LINE({ useless += GetCorrelationFactorFixed3(m_gcfStep, maxSamples, m_gcfStep); });
-					//DEFAULT_PRINT->print("#");
-					//PROFILE_STATEMENT_LINE({ useless += GetCorrelationFactorFixed4(m_gcfStep, maxSamples, m_gcfStep); });
-					//DEFAULT_PRINT->print("#");
-					//PrintStringLong("useless", useless); Ln();
-					//PROFILE_STATEMENT_LINE(iterations, "#GCFo", { volatile unsigned long gcf = GetCorrelationFactorFixed_old(0, maxSamples, m_gcfStep); });
-					//PROFILE_STATEMENT_LINE(iterations, "#GCF", { volatile unsigned long gcf = GetCorrelationFactorFixed(0, maxSamples, m_gcfStep); });
-					//PROFILE_STATEMENT_LINE(iterations, "#GCF2", { volatile unsigned long gcf = GetCorrelationFactorFixed2(0, maxSamples, m_gcfStep); });
-					//PROFILE_STATEMENT_LINE(iterations, "#GCF3", { volatile unsigned long gcf = GetCorrelationFactorFixed3(0, maxSamples, m_gcfStep); });
-					//PROFILE_STATEMENT(iterations, "#GCFo", { GetCorrelationFactorFixed_old(0, maxSamples, m_gcfStep); });
-					//PROFILE_STATEMENT(iterations, "#GCF" , { GetCorrelationFactorFixed(0, maxSamples, m_gcfStep); });
-					//PROFILE_STATEMENT(iterations, "#GCF2", { GetCorrelationFactorFixed2(0, maxSamples, m_gcfStep); });
-				}
-
-				//char t;
-
-				//PROFILE_STATEMENT(300000UL, "#IC" , { t = InterpolateChar(5, 10, 10); });
-				//DEFAULT_PRINT->print("#"); DEFAULT_PRINT->print(t); Ln();
-				//PROFILE_STATEMENT(300000UL, "#IC2", { t = InterpolateChar(5, 10, 10); });
-				//DEFAULT_PRINT->print("#"); DEFAULT_PRINT->print(t); Ln();
 
 				// We start a bit before the minimum offset to prime the thresholds
 				//for (Fixed offset = max(offsetAtMinFrequency - OFFSET_STEP * 4, 0); offset < maxSamplesFixed; offset += OFFSET_STEP)
@@ -1203,28 +687,12 @@ public:
                     //@TODO: why the shift here? is this a legacy artifact?
                     //unsigned long curCorrelation = GetCorrelationFactorFixed(offset, 2) << 8; // was using 96, which worked for the simple function generator but didn't work quite as well for the bagpipe signal
 					unsigned long curCorrelation = GetCorrelationFactorFixed(offset, maxSamples, m_gcfStep);
-					//unsigned long curCorrelation2 = GetCorrelationFactorFixed4(offset, maxSamples, m_gcfStep);
-					//if (curCorrelation != curCorrelation2)
-					//{
-					//	DEFAULT_PRINT->print("#");
-					//	DEFAULT_PRINT->print("GCF discrepancy");
-					//	Ln();
-					//}
 
 					if (doPrint && (g_dumpMode == DumpMode::DumpGcf))
 					{
-						//PrintStringInt("ofs", offset); DEFAULT_PRINT->print(" ");
-						//PrintStringLong("gcf", curCorrelation); DEFAULT_PRINT->print(" "); Ln();
 						DEFAULT_PRINT->print("#");
 						DEFAULT_PRINT->print(offset); DEFAULT_PRINT->print(COMMA_SEPARATOR);
 						DEFAULT_PRINT->print(curCorrelation); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 4) * 4); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 8) * 8); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 16) * 16); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 24) * 24); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 32) * 32); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 64) * 64); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-						//DEFAULT_PRINT->print(GetCorrelationFactorFixed(offset, 96) * 96); DEFAULT_PRINT->print(COMMA_SEPARATOR);
 						DEFAULT_PRINT->print(maxCorrelation); DEFAULT_PRINT->print(COMMA_SEPARATOR);
 						DEFAULT_PRINT->print(correlationDipThreshold);
 						Ln();
@@ -1234,8 +702,6 @@ public:
 					{
 						maxCorrelation = curCorrelation;
 						correlationDipThreshold = (maxCorrelation * m_correlationDipThresholdPercent) / 100;
-						//PrintStringLong("maxCorrelation", maxCorrelation); DEFAULT_PRINT->print(" ");
-						//PrintStringLong("correlationDipThreshold", correlationDipThreshold); Ln();
 					}
 
 					if (offset < offsetToStartPreciseSampling)
@@ -1251,7 +717,6 @@ public:
 							bestCorrelation = curCorrelation;
 							minBestOffset = offset;
 							maxBestOffset = offset;
-							//DEFAULT_PRINT->print("best!"); Ln();
 						}
 						else if (curCorrelation == bestCorrelation)
 						{
@@ -1259,11 +724,9 @@ public:
 						}
 
 						inThreshold = true;
-						//DEFAULT_PRINT->print("enter threshold"); Ln();
 					}
 					else if (inThreshold) // was in threshold, now exited, have best minimum in threshold
 					{
-						//DEFAULT_PRINT->print("exit threshold"); Ln();
 						break;
 					}
 
@@ -1280,13 +743,6 @@ public:
 					lastCorrelation = curCorrelation;
 				}
 
-				//if (doPrint)
-				//{
-				//	PrintStringInt("minBestOffset", minBestOffset); Ln();
-				//	PrintStringInt("maxBestOffset", maxBestOffset); Ln();
-				//	PrintStringInt("maxSamplesFixed", maxSamplesFixed); Ln();
-				//}
-
                 if (!doPrint
                     && (
                         ((g_dumpBelowFrequency >= 0.0f) && (minBestOffset != ~0) && (GetFrequencyForOffsetFixed(minBestOffset) < g_dumpBelowFrequency))
@@ -1300,20 +756,8 @@ public:
                 
                 if (minBestOffset == ~0)
 				{
-					//DEFAULT_PRINT->print("bestOffset was never set"); Ln();
 					return -1.0f;
 				}
-
-				// Refine the search for the offset that produces the true minimum autocorrelation
-				// At this point, were we to use a very small GCF step, I think we could use a binary search
-				// to find the minimum; it feels like we can rely on the area of the autocorrelation function
-				// that we are exploring to be parabola-like with one actual minimum. However, a few
-				// questions arise:
-				// -is it faster to search fewer points with a small GCF step or more points with a bigger GCF step? (that depends)
-				// -with a bigger GCF step, are we introducing sampling artifacts in the autocorrelation function which are big enough
-				//  to through off the hunt for a minimum?
-				//@TODO: try searching for the minimum with various GCF steps and output the found minimum at the various steps;
-				// see how big we can make the step without affecting the accuracy of results
 
 				maxCorrelationDipPercent = (bestCorrelation * 100) / maxCorrelation;
 
@@ -1330,10 +774,6 @@ public:
 
 				DEBUG_PRINT_STATEMENTS(
 				{
-					//PrintStringInt("lowOffset", lowOffset); Ln();
-					//PrintStringInt("lowGcf", lowGcf); Ln();
-					//PrintStringInt("highOffset", highOffset); Ln();
-					//PrintStringInt("highGcf", highGcf); Ln();
 					PrintStringInt("minBestOffset", minBestOffset); Ln();
 					PrintStringInt("maxBestOffset", maxBestOffset); Ln();
 				});
@@ -1418,11 +858,6 @@ public:
 			{
 				bestOffset = (minBestOffset + maxBestOffset) / 2;
 			}
-
-			//DEFAULT_PRINT->print("#"); DEFAULT_PRINT->print(bestOffset);
-			//DEFAULT_PRINT->print(COMMA_SEPARATOR); DEFAULT_PRINT->print(minBestOffset);
-			//DEFAULT_PRINT->print(COMMA_SEPARATOR); DEFAULT_PRINT->print(maxBestOffset);
-			//Ln();
 
 			float result = GetFrequencyForOffsetFixed(bestOffset);
 			minFrequency = GetFrequencyForOffsetFixed(maxBestOffset);
@@ -1598,7 +1033,7 @@ public:
 		void Update()
 		{
 			// Select the right ADC channel
-			//SelectADCChannel();
+			SelectADCChannel();
 
 			DEBUG_PRINT_STATEMENTS(Serial.write("DetermineSignalPitch"); Ln(););
 			float minSignalFrequency = -1.0f;
@@ -1610,11 +1045,6 @@ public:
 			float instantFrequency = DetermineSignalPitch(minSignalFrequency, maxSignalFrequency, signalMin, signalMax, maxCorrelationDipPercent);
 
 			dspTotalMs += millis();
-#if FAKE_FREQUENCY
-			static float t = 0.0f;
-			t += 0.001f;
-			instantFrequency = 400.0f + 200.0f * sinf(t);
-#endif // #if FAKE_FREQUENCY
 			DEBUG_PRINT_STATEMENTS(PrintStringFloat("instantFrequency", instantFrequency); Ln(););
 
 			DEBUG_PRINT_STATEMENTS(Serial.write("GetMidiNoteIndexForFrequency"); Ln(););
@@ -1641,94 +1071,16 @@ public:
 				m_filteredFrequency = -1.0f;
 			}
 
-			//#if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL || PRINT_FREQUENCY_TO_SERIAL_VT100
-			//			DEBUG_PRINT_STATEMENTS(Serial.write("percent"); Ln(););
-			//			float percent = 0.0f;
-			//			if (m_filteredFrequency < centerDisplayFrequency)
-			//			{
-			//				percent = 0.5f * (m_filteredFrequency - minDisplayFrequency) / (centerDisplayFrequency - minDisplayFrequency);
-			//			}
-			//			else
-			//			{
-			//				percent = 0.5f + 0.5f * (m_filteredFrequency - centerDisplayFrequency) / (maxDisplayFrequency - centerDisplayFrequency);
-			//			}
-			//#endif // #if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL
-
-#if PRINT_FREQUENCY_TO_SERIAL
-#if PRINT_FREQUENCY_TO_SERIAL_VT100
-			MoveCursor(0, 0);
-			Serial.print("\x1B[0m");
-#endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
-			//Serial.print("-----"); Ln();
-			//float sps = 1000000.0f / deltaMicros;
-			//PrintStringFloat("SPS ", sps); Ln();
-			//PrintStringInt("ofs (int)", bestOffset); Ln();
-			//PrintStringFloat("ofs (float)", FIXED2F(bestOffset)); Ln();
-			//PrintStringInt("numCoarseCorrelations", numCoarseCorrelations); DEFAULT_PRINT->print("   "); Ln();
-			//PrintStringInt("numFineCorrelations", numFineCorrelations); DEFAULT_PRINT->print("   "); Ln();
-			//PrintStringFloat("Instant freq", instantFrequency); Ln();
-			DEFAULT_PRINT->print('r');
-			//float instantFrequency = 0.0f;
-			//float minSignalFrequency = 0.0f;
-			//float maxSignalFrequency = 0.0f;
-			//float signalMin = 0.0f;
-			//float signalMax = 0.0f;
-			//float dspTotalMs = 0.0f;
-			//float maxCorrelationDipPercent = 0.0f;
-			Serial.print(m_audioPin); Serial.print(COMMA_SEPARATOR);
-			PrintFloat(instantFrequency); Serial.print(COMMA_SEPARATOR);
-			PrintFloat(minSignalFrequency); Serial.print(COMMA_SEPARATOR);
-			PrintFloat(maxSignalFrequency); Serial.print(COMMA_SEPARATOR);
-			Serial.print(signalMin); Serial.print(COMMA_SEPARATOR);
-			Serial.print(signalMax); Serial.print(COMMA_SEPARATOR);
-			Serial.print(dspTotalMs); Serial.print(COMMA_SEPARATOR);
-			Serial.print(maxCorrelationDipPercent);
-			Ln();
-			//PrintStringFloat("Filtered freq", filteredFrequency); Ln();
-			//PrintStringInt("MIDI note", m_tunerNote); Ln();
-			//PrintStringFloat("MIDI frequency", centerFrequency); Ln();
-			//PrintStringFloat("Bottom frequency for note", minFrequency); Ln();
-			//PrintStringFloat("Top frequency for note", maxFrequency); Ln();
-			//PrintStringFloat("Percent note (50% is perfect)", percent); Ln();
-			//#if PRINT_FREQUENCY_TO_SERIAL_VT100
-			//			percent = Clamp(percent, 0.0f, 0.9999f);
-			//			const int numCharacters = 31;
-			//			const int centerCharacterIndex = numCharacters / 2;
-			//			int characterIndex = (percent * numCharacters);
-			//			const char* tunerCharacters[2][3] = {{"»", /*"·"*/"oCOMMA_SEPARATOR«"}, {"|COMMA_SEPARATOROCOMMA_SEPARATOR|"}};
-			//			for (int i = 0; i < numCharacters; ++i)
-			//			{
-			//				int leftRightSelector = sgn(i - centerCharacterIndex) + 1;
-			//				int onOffSelector = (i == characterIndex) ? 1 : 0;
-			//				Serial.print(tunerCharacters[onOffSelector][leftRightSelector]);
-			//			}
-			//			Serial.print(" ");
-			//			Ln();
-			//#endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
-#endif //#if PRINT_FREQUENCY_TO_SERIAL
-
-#if ENABLE_LCD
-			RenderWideGlyphForNote(m_tunerNote);
-
-			switch (m_mode)
-				{
-			case TunerMode::Tuner:
-			{
-				PrintCenterTick();
-				if (filteredFrequency > 0.0f)
-				{
-					LcdTick(percent);
-				}
-				else
-				{
-					LcdTick(-1);
-				}
-			}
-			break;
-			default:
-				break;
-			}
-#endif // #if ENABLE_LCD
+            DEFAULT_PRINT->print('r');
+            Serial.print(m_audioPin); Serial.print(COMMA_SEPARATOR);
+            PrintFloat(instantFrequency); Serial.print(COMMA_SEPARATOR);
+            PrintFloat(minSignalFrequency); Serial.print(COMMA_SEPARATOR);
+            PrintFloat(maxSignalFrequency); Serial.print(COMMA_SEPARATOR);
+            Serial.print(signalMin); Serial.print(COMMA_SEPARATOR);
+            Serial.print(signalMax); Serial.print(COMMA_SEPARATOR);
+            Serial.print(dspTotalMs); Serial.print(COMMA_SEPARATOR);
+            Serial.print(maxCorrelationDipPercent);
+            Ln(); 
 		}
 
 		bool m_enableDetailedSearch;
@@ -1749,10 +1101,6 @@ public:
 	};
 
 	Tuner()
-#if ENABLE_LCD
-		, m_lcd(2, 3, 4, 5, 6, 7, 8)
-#endif // #if ENABLE_LCD
-		: m_mode(TunerMode::Tuner)
 	{
 		for (int i = 0; i < NUM_CHANNELS; ++i)
 		{
@@ -1760,41 +1108,11 @@ public:
 		}
 
 		DEBUG_PRINT_STATEMENTS(Serial.write("Constructing tuner..."); Ln(););
-
-#if ENABLE_LCD
-		g_lcd = &m_lcd;
-#endif // #if ENABLE_LCD
-	}
-
-	~Tuner()
-	{
-#if ENABLE_LCD
-		g_lcd = NULL;
-#endif // #if ENABLE_LCD
 	}
 
 	void Start()
 	{
 		DEBUG_PRINT_STATEMENTS(Serial.write("Starting tuner..."); Ln(););
-
-#if ENABLE_LCD
-		m_lcd.clear();
-#if ENABLE_STARTUP_MESSAGE
-		m_lcd.print("Hello world");
-		delay(2000);
-#endif // #if ENABLE_STARTUP_MESSAGE
-		m_lcd.clear();
-		for (int i = 0; i < CHARACTER_WIDTH; ++i)
-		{
-			Glyph g;
-			for (int j = 0; j < CHARACTER_HEIGHT; ++j)
-			{
-				g[j] = (1 << (CHARACTER_WIDTH - 1 - i));
-			}
-			m_lcd.setCharacterGlyph(i, g);
-		}
-		m_lcd.setCharacterGlyph(TICK_GLYPH, g_tickGlyph);
-#endif // #if ENABLE_LCD
 
 		// Enable auto-trigger enable
 		sbi(ADCSRA, ADATE);
@@ -1819,25 +1137,8 @@ public:
 		// Start the shebang
 		sbi(ADCSRA, ADSC);
 
-#if ENABLE_LCD
-		static int const MIN_MEMORY = 89;
-		if (AvailableMemory() < MIN_MEMORY)
-		{
-			for(;;)
-			{
-				m_lcd.clear();
-				m_lcd.print("OOM");
-				m_lcd.setCursor(0, 1);
-				m_lcd.print(AvailableMemory() - MIN_MEMORY);
-				delay(2000);
-			}
-		}
-#endif // #if ENABLE_LCD
-
 		LoadTuning();
 		//TunePitch();
-
-		m_lastMicros = 0;
 	}
 
 	void Stop()
@@ -1920,66 +1221,6 @@ public:
 		}
 	}
 
-	void RenderWideGlyphForNote(int note)
-	{
-#if ENABLE_LCD
-		if (note >= 0)
-		{
-			int nameIndex = GetNoteNameIndex(note);
-			int glyphIndex = g_noteGlyphIndex[nameIndex];
-			m_lcd.setWideCharacterGlyph(NOTE_GLYPH, g_noteGlyphs[glyphIndex]);
-			m_lcd.setCursor(1, 0); // DO NOT FACTOR THIS OUT - setting a character glyph sets the next write address; this sets it to DD RAM, whereas setWideCharacterGlyph will leave it in CGRAM
-			m_lcd.write(NOTE_GLYPH);
-			m_lcd.write(NOTE_GLYPH + 1);
-			if (g_noteSharpSign[nameIndex])
-			{
-				m_lcd.write('#');
-			}
-			else
-			{
-				m_lcd.write(' ');
-			}
-		}
-		else
-		{
-			m_lcd.setCursor(1, 0);
-			m_lcd.print("   ");
-		}
-#else
-		(void)note;
-#endif // #if ENABLE_LCD
-	}
-
-	void PrintCenterTick()
-	{
-#if ENABLE_LCD
-		m_lcd.setCursor(DISPLAY_WIDTH >> 1, 0);
-		m_lcd.write(TICK_GLYPH);
-#endif // #if ENABLE_LCD
-	}
-
-	void LcdTick(float f)
-	{
-#if ENABLE_LCD
-		uint8_t tick = uint8_t(f * MAX_TICK);
-		uint8_t x = (tick / 5) + 1;
-		uint8_t glyph = tick % 5;
-		if (x < DISPLAY_WIDTH)
-		{
-			m_lcd.setCursor(x, 1);
-			m_lcd.write(glyph);
-		}
-		if ((x != m_lastLcdTickX) && (m_lastLcdTickX < DISPLAY_WIDTH))
-		{
-			m_lcd.setCursor(m_lastLcdTickX, 1);
-			m_lcd.write(' ');
-		}
-		m_lastLcdTickX = x;
-#else
-		(void)f;
-#endif // #if ENABLE_LCD
-	}
-
 	void TunePitch()
 	{
 		unsigned long lastPress = millis();
@@ -2015,25 +1256,12 @@ public:
 			if (buttonPressed)
 			{
 				lastPress = millis();
-#if ENABLE_LCD
-				m_lcd.clear();
-				m_lcd.print("A = ");
-				PrintFloat(m_a440.f, 2);
-				m_lcd.print(" Hz   ");
-#endif // #if ENABLE_LCD
 			}
 
 			firstTime = false;
 		}
-#if ENABLE_LCD
-		m_lcd.clear();
-#endif // #if ENABLE_LCD
-		SaveTuning();
-	}
 
-	void CycleModes()
-	{
-		m_mode = static_cast<TunerMode::Type>((m_mode + 1) % TunerMode::Max);
+        SaveTuning();
 	}
 
 	void Go()
@@ -2042,29 +1270,7 @@ public:
 
         DEBUG_PRINT_STATEMENTS(Serial.write("Initializing..."); Ln(););
 
-		//{
-		//	DEFAULT_PRINT->print("#");
-		//	float maxFreq = m_channels[0].GetFrequencyForOffsetFixed(I2FIXED(ABSOLUTE_MIN_SAMPLES));
-		//	float secondLastFreq = m_channels[0].GetFrequencyForOffsetFixed(I2FIXED(ABSOLUTE_MIN_SAMPLES) + 1);
-		//	PrintStringFloat("Max freq", maxFreq);
-		//	PrintStringFloat("Second last freq", secondLastFreq);
-		//	PrintStringFloat("Min freq discr", maxFreq - secondLastFreq);
-		//	Ln();
-		//}
-
-#define TEST_FREQUENCY(x) //PrintStringInt(#x, GetMidiNoteIndexForFrequency(x)); Ln();
-		TEST_FREQUENCY(474.83380f);
-		TEST_FREQUENCY(500.0f);
-		TEST_FREQUENCY(600.0f);
-		TEST_FREQUENCY(700.0f);
-		TEST_FREQUENCY(800.0f);
-		TEST_FREQUENCY(900.0f);
-
 		Start();
-
-#if PRINT_FREQUENCY_TO_SERIAL_VT100
-		ClearScreen();
-#endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
 
 		int activeChannelIndex = 0;
 
@@ -2075,7 +1281,6 @@ public:
 				bool locked = false;
 				while (Serial.available() || locked)
 				{
-					//DEFAULT_PRINT->print("#"); DEFAULT_PRINT->print(Serial.available()); Ln();
 					while (locked && !Serial.available())
 					{
 					}
@@ -2153,8 +1358,6 @@ public:
 				DEFAULT_PRINT->print("c"); Ln();
 			}
 
-			//DEFAULT_PRINT->print("#Left input loop"); Ln();
-
 			DEBUG_PRINT_STATEMENTS(Serial.write("Main tuner loop"); Ln(););
 			
 			DEBUG_PRINT_STATEMENTS(Serial.write("Button updates"); Ln(););
@@ -2166,64 +1369,20 @@ public:
 				TunePitch();
 			}
 
-			g_modeButton.Update();
-
-			if (g_modeButton.JustPressed())
-			{
-				DEBUG_PRINT_STATEMENTS(Serial.write("Mode button pressed"); Ln(););
-
-				// Exit current mode
-				switch (m_mode)
-				{
-				default: break;
-				}
-
-				// Cycle modes
-				CycleModes();
-				
-				// Enter new mode
-#if ENABLE_LCD
-				m_lcd.clear();
-#endif // #if ENABLE_LCD
-
-				switch (m_mode)
-				{
-				default: 
-					break;
-				}
-			}
-
-#if ENABLE_LCD
-			m_lcd.home();
-#endif // #if ENABLE_LCD
-
 			for (unsigned int i = 0; i < ARRAY_COUNT(m_channels); ++i)
 			{
 				m_channels[i].m_a440 = m_a440;
 				m_channels[i].Update();
 			}
-
-			unsigned long nowMicros = micros();
-			//unsigned long deltaMicros = nowMicros - m_lastMicros;
-
-			m_lastMicros = nowMicros;
 		}
 
 		Stop();
 	}
 
 private:
-#if ENABLE_LCD
-	LiquidCrystal m_lcd;
-#endif // #if ENABLE_LCD
-	int m_lastLcdTickX;
-	
 	FourByteUnion m_a440;
 
-	TunerMode::Type m_mode;
-
 	Channel m_channels[NUM_CHANNELS];
-	unsigned long m_lastMicros;
 };
 
 //int Tuner::s_correlationStep = 2;
@@ -2236,7 +1395,6 @@ private:
 void setup()                                        // run once, when the sketch starts
 {
 	Serial.begin(115200); // for debugging
-	//Serial.println("Setup hardwareserial.");
 	pinMode(kStatusPin, OUTPUT);            // sets the digital pin as output
 	pinMode(kStatusPin2, OUTPUT);            // sets the digital pin as output
 	digitalWrite(kStatusPin, LOW); 
