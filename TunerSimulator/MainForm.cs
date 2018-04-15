@@ -134,7 +134,7 @@ namespace TunerSimulator
             tunerChannelControl1.MinFrequency.Value = (int)(bassDroneFreq * (1 - frequencyDeviation));
             tunerChannelControl1.MaxFrequency.Value = (int)(bassDroneFreq * (1 + frequencyDeviation));
             tunerChannelControl1.CorrelationDipPercent.Value = 25;
-            tunerChannelControl1.GcfStep.Value = 2;
+            tunerChannelControl1.GcfStep.Value = 16;
             tunerChannelControl1.BaseOffsetStep.Value = 4;
             tunerChannelControl1.BaseOffsetStepIncrement.Value = 2;
             tunerChannelControl1.DetailedSearchEnabled = true;
@@ -145,7 +145,7 @@ namespace TunerSimulator
             tunerChannelControl2.MinFrequency.Value = (int)(tenorDroneFreq * (1 - frequencyDeviation));
             tunerChannelControl2.MaxFrequency.Value = (int)(tenorDroneFreq * (1 + frequencyDeviation));
             tunerChannelControl2.CorrelationDipPercent.Value = 25;
-            tunerChannelControl2.GcfStep.Value = 2;
+            tunerChannelControl2.GcfStep.Value = 8;
             tunerChannelControl2.BaseOffsetStep.Value = 4;
             tunerChannelControl2.BaseOffsetStepIncrement.Value = 2;
             tunerChannelControl2.DetailedSearchEnabled = true;
@@ -155,7 +155,7 @@ namespace TunerSimulator
             tunerChannelControl3.MinFrequency.Value = (int)(tenorDroneFreq * (1 - frequencyDeviation));
             tunerChannelControl3.MaxFrequency.Value = (int)(tenorDroneFreq * (1 + frequencyDeviation));
             tunerChannelControl3.CorrelationDipPercent.Value = 25;
-            tunerChannelControl3.GcfStep.Value = 2;
+            tunerChannelControl3.GcfStep.Value = 8;
             tunerChannelControl3.BaseOffsetStep.Value = 4;
             tunerChannelControl3.BaseOffsetStepIncrement.Value = 2;
             tunerChannelControl3.DetailedSearchEnabled = true;
@@ -167,7 +167,7 @@ namespace TunerSimulator
             tunerChannelControl4.MinFrequency.Value = (int)(chanterMinFreq * (1 - frequencyDeviation));
             tunerChannelControl4.MaxFrequency.Value = (int)(chanterMaxFreq * (1 + frequencyDeviation));
             tunerChannelControl4.CorrelationDipPercent.Value = 25;
-            tunerChannelControl4.GcfStep.Value = 2;
+            tunerChannelControl4.GcfStep.Value = 4;
             tunerChannelControl4.BaseOffsetStep.Value = 4;
             tunerChannelControl4.BaseOffsetStepIncrement.Value = 2;
             tunerChannelControl4.DetailedSearchEnabled = true;
