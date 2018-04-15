@@ -43,6 +43,7 @@ namespace TunerSimulator
 
         struct TunerReading
         {
+            public int ChannelIndex;
             public float SignalFrequency;
             public float MinSignalFrequency;
             public float MaxSignalFrequency;
@@ -163,7 +164,8 @@ namespace TunerSimulator
             tunerChannelControl4.SuspendChanges = false;
 
             const bool fullRangeChannel0 = true;
-            if (fullRangeChannel0)
+            const bool fullRangeAllChannels = true;
+            if (fullRangeChannel0 || fullRangeAllChannels)
             {
                 tunerChannelControl1.SuspendChanges = true;
                 tunerChannelControl1.MinFrequency.Value = 75;
@@ -173,6 +175,36 @@ namespace TunerSimulator
                 tunerChannelControl1.BaseOffsetStep.Value = 4;
                 tunerChannelControl1.BaseOffsetStepIncrement.Value = 2;
                 tunerChannelControl1.SuspendChanges = false;
+            }
+
+            if (fullRangeAllChannels)
+            {
+                tunerChannelControl2.SuspendChanges = true;
+                tunerChannelControl2.MinFrequency.Value = tunerChannelControl1.MinFrequency.Value;
+                tunerChannelControl2.MaxFrequency.Value = tunerChannelControl1.MaxFrequency.Value;
+                tunerChannelControl2.CorrelationDipPercent.Value = tunerChannelControl1.CorrelationDipPercent.Value;
+                tunerChannelControl2.GcfStep.Value = tunerChannelControl1.GcfStep.Value;
+                tunerChannelControl2.BaseOffsetStep.Value = tunerChannelControl1.BaseOffsetStep.Value;
+                tunerChannelControl2.BaseOffsetStepIncrement.Value = tunerChannelControl1.BaseOffsetStepIncrement.Value;
+                tunerChannelControl2.SuspendChanges = false;
+
+                tunerChannelControl3.SuspendChanges = true;
+                tunerChannelControl3.MinFrequency.Value = tunerChannelControl1.MinFrequency.Value;
+                tunerChannelControl3.MaxFrequency.Value = tunerChannelControl1.MaxFrequency.Value;
+                tunerChannelControl3.CorrelationDipPercent.Value = tunerChannelControl1.CorrelationDipPercent.Value;
+                tunerChannelControl3.GcfStep.Value = tunerChannelControl1.GcfStep.Value;
+                tunerChannelControl3.BaseOffsetStep.Value = tunerChannelControl1.BaseOffsetStep.Value;
+                tunerChannelControl3.BaseOffsetStepIncrement.Value = tunerChannelControl1.BaseOffsetStepIncrement.Value;
+                tunerChannelControl3.SuspendChanges = false;
+
+                tunerChannelControl4.SuspendChanges = true;
+                tunerChannelControl4.MinFrequency.Value = tunerChannelControl1.MinFrequency.Value;
+                tunerChannelControl4.MaxFrequency.Value = tunerChannelControl1.MaxFrequency.Value;
+                tunerChannelControl4.CorrelationDipPercent.Value = tunerChannelControl1.CorrelationDipPercent.Value;
+                tunerChannelControl4.GcfStep.Value = tunerChannelControl1.GcfStep.Value;
+                tunerChannelControl4.BaseOffsetStep.Value = tunerChannelControl1.BaseOffsetStep.Value;
+                tunerChannelControl4.BaseOffsetStepIncrement.Value = tunerChannelControl1.BaseOffsetStepIncrement.Value;
+                tunerChannelControl4.SuspendChanges = false;
             }
 
             if (!m_serialEnabled)
@@ -210,14 +242,18 @@ namespace TunerSimulator
 
         void OnTunerReading(TunerReading tr)
         {
-            lblReading.Text = string.Format("Instant Frequency: {0:###0.00} ({1:###0.00} - {2:###0.00}) (expecting: {3}) [{4}, {5}] {6}",
+            var sb = new StringBuilder();
+            sb.AppendFormat("C{0}: ", tr.ChannelIndex);
+            sb.AppendFormat("Instant Frequency: {0:###0.00} ({1:###0.00} - {2:###0.00})",
                 tr.SignalFrequency,
                 tr.MinSignalFrequency,
-                tr.MaxSignalFrequency,
+                tr.MaxSignalFrequency);
+            sb.AppendFormat("(expecting: {0}) [{1}, {2}]",
                 m_soundOutput.Sample != null ? m_soundOutput.Sample.Frequency.ToString() : "-",
                 tr.MinSignalAmplitude,
-                tr.MaxSignalAmplitude,
-                SPINNER[m_spinnerIndex]);
+                tr.MaxSignalAmplitude);
+            sb.Append(SPINNER[m_spinnerIndex]);
+            lblReading.Text = sb.ToString();
 
             lblReading.ForeColor = IsReadingValid(m_samplePlayback.Frequency, tr) ? Color.DarkGreen
                 : ((tr.SignalFrequency >= 0.0f) ? Color.DarkRed
@@ -573,15 +609,16 @@ namespace TunerSimulator
                     {
                         var reading = new TunerReading();
                         var values = line.Split(',');
-                        if (values.Length == 7)
+                        if (values.Length == 8)
                         {
-                            float.TryParse(values[0], out reading.SignalFrequency);
-                            float.TryParse(values[1], out reading.MinSignalFrequency);
-                            float.TryParse(values[2], out reading.MaxSignalFrequency);
-                            float.TryParse(values[3], out reading.MinSignalAmplitude);
-                            float.TryParse(values[4], out reading.MaxSignalAmplitude);
-                            long.TryParse(values[5], out reading.TotalMs);
-                            int.TryParse(values[6], out reading.MaxCorrelationDipPercent);
+                            int.TryParse(values[0], out reading.ChannelIndex);
+                            float.TryParse(values[1], out reading.SignalFrequency);
+                            float.TryParse(values[2], out reading.MinSignalFrequency);
+                            float.TryParse(values[3], out reading.MaxSignalFrequency);
+                            float.TryParse(values[4], out reading.MinSignalAmplitude);
+                            float.TryParse(values[5], out reading.MaxSignalAmplitude);
+                            long.TryParse(values[6], out reading.TotalMs);
+                            int.TryParse(values[7], out reading.MaxCorrelationDipPercent);
                             EnqueueTunerReading(reading);
                             BeginInvoke((Action)(() => OnTunerReading(reading)));
                             //Console.WriteLine("Tuner frequency: {0} (raw: {1})", reading.SignalFrequency, line);

@@ -731,6 +731,13 @@ static int const FRAC_MASK = (1 << FIXED_SHIFT) - 1;
 #define		FIXED2F(x) ((x) / float(1 << FIXED_SHIFT))
 static int const PRIME_SHIFT = 8;
 
+typedef union
+{
+	unsigned long ul;
+	float f;
+} FourByteUnion;
+STATIC_ASSERT(sizeof(unsigned long) == sizeof(float)); // verify that things match up for the above union
+
 namespace TunerMode
 {
 	enum Type
@@ -793,6 +800,10 @@ public:
 	public:
 		Channel()
 		{
+			m_a440.f = DEFAULT_A440;
+	
+			m_tunerNote = -1;
+
 			m_enableDetailedSearch = true;
 
 			m_gcfStep = 4;
@@ -812,11 +823,13 @@ public:
 		void SelectADCChannel()
 		{
 			// Select input channel + set reference to Vcc
-			ADMUX = /*(0 << 6) |*/ (m_audioPin & 0x0f);
-			ADMUX = (1 << 6) | (m_audioPin & 0x0f);
+            unsigned char admux = ADMUX;
+            admux &= ~(0x0F);
+            admux |= m_audioPin;
+            ADMUX = admux;
 
 			// Disable other ADC channels (try to reduce noise?)
-			DIDR0 = (0x3F ^ (1 << m_audioPin));
+			//DIDR0 = (0x3F ^ (1 << m_audioPin));
 		}
 
 		// This function requires proper setup in Tuner::Start() and SelectADCChannel()
@@ -1141,7 +1154,7 @@ public:
                 }
 
 				{
-					const unsigned long iterations = 2000;
+					//const unsigned long iterations = 2000;
 
 					// Look at assembler output?
 					//DEFAULT_PRINT->print("#");
@@ -1425,6 +1438,299 @@ public:
 			return result;
 		}
 
+#if (TEMPERAMENT == EQUAL_TEMPERAMENT)
+		// Converts a fundamental frequency in Hz to a MIDI note index.  Slow.
+		int GetMidiNoteIndexForFrequency(float frequency)
+		{
+			if (frequency < 0.0f)
+			{
+				return -1;
+			}
+
+			// Shift the note down half a semitone so the frequency interval that maps to a MIDI note is centered on the note.
+			frequency *= QUARTERTONE_DOWN;
+
+			int note = A440_NOTE;
+			float a440 = m_a440.f;
+			float a440_2 = 2.0f * a440;
+			while (frequency < a440)
+			{
+				frequency *= 2.0f;
+				note -= 12;
+			}
+			while (frequency > a440_2)
+			{
+				frequency *= 0.5f;
+				note += 12;
+			}
+			while (frequency > a440)
+			{
+				frequency *= SEMITONE_DOWN;
+				note += 1;
+			}
+			return note;
+		}
+
+		// Compute the fundamental frequency of a given MIDI note index.  Slow.
+		float GetFrequencyForMidiNoteIndex(int note)
+		{
+			if (note < 0.0f)
+			{
+				return -1.0f;
+			}
+
+			float result = m_a440.f;
+
+			while (note < A440_NOTE)
+			{
+				note += 12;
+				result *= 0.5f;
+			}
+
+			while (note > A880_NOTE)
+			{
+				note -= 12;
+				result *= 2.0f;
+			}
+
+			while (note > A440_NOTE)
+			{
+				--note;
+				result *= SEMITONE_UP;
+			}
+
+			return result;
+		}
+#elif (TEMPERAMENT == JUST_TEMPERAMENT)
+		// Converts a fundamental frequency in Hz to a MIDI note index.  Slow.
+		int GetMidiNoteIndexForFrequency(float frequency)
+		{
+			DEBUG_PRINT_STATEMENTS(Serial.write("GetMidiNoteIndexForFrequency()"); Ln(););
+
+			if (frequency <= 0.0f)
+			{
+				DEBUG_PRINT_STATEMENTS(Serial.write("earlying out, freq is <= 0"); Ln(););
+				return -1;
+			}
+
+			// Shift the note down up a semitone so the frequency interval that maps to a MIDI note is centered on the note.
+			// (Algorithm here is different from the one for equal temperament, we have to shift in the other direction.)
+			frequency *= QUARTERTONE_UP;
+
+			DEBUG_PRINT_STATEMENTS(PrintStringFloat("Frequency", frequency); Ln(););
+
+			int note = A440_NOTE;
+			float a440 = m_a440.f;
+			float a440_2 = 2.0f * a440;
+			DEBUG_PRINT_STATEMENTS(PrintStringFloat("a440", a440); Ln(););
+			while (frequency < a440)
+			{
+				DEBUG_PRINT_STATEMENTS(Serial.write("Double up"); Ln(););
+				frequency *= 2.0f;
+				note -= 12;
+			}
+			while (frequency >= a440_2)
+			{
+				DEBUG_PRINT_STATEMENTS(Serial.write("Double down"); Ln(););
+				frequency *= 0.5f;
+				note += 12;
+			}
+
+			DEBUG_PRINT_STATEMENTS(PrintStringFloat("Centered frequency", frequency); Ln(););
+
+			auto rangeIndex = 0;
+			float rangeHigh = g_noteSemitoneRatio[rangeIndex] * a440;
+			float rangeLow = -1.0f;
+			for (;;)
+			{
+				rangeLow = rangeHigh;
+				++rangeIndex;
+				rangeHigh = g_noteSemitoneRatio[rangeIndex] * a440;
+				DEBUG_PRINT_STATEMENTS(
+				{
+					PrintStringFloat("rangeLow", rangeLow); Ln();
+				PrintStringFloat("rangeHigh", rangeHigh); Ln();
+				});
+				if ((frequency >= rangeLow) && (frequency < rangeHigh))
+				{
+					DEBUG_PRINT_STATEMENTS(PrintStringFloat("found note!", rangeHigh); Ln(););
+					break;
+				}
+				++note;
+				DEBUG_PRINT_STATEMENTS(PrintStringInt("note", note); Ln(););
+			}
+			DEBUG_PRINT_STATEMENTS(PrintStringInt("Final note", note); Ln(););
+			return note;
+		}
+
+		// Compute the fundamental frequency of a given MIDI note index.  Slow.
+		float GetFrequencyForMidiNoteIndex(int note)
+		{
+			DEBUG_PRINT_STATEMENTS(Serial.write("GetFrequencyForMidiNoteIndex()"); Ln(); );
+
+			if (note < 0.0f)
+			{
+				return -1.0f;
+			}
+
+			float result = m_a440.f;
+
+			while (note < A440_NOTE)
+			{
+				note += 12;
+				result *= 0.5f;
+			}
+
+			while (note > A880_NOTE)
+			{
+				note -= 12;
+				result *= 2.0f;
+			}
+
+			result *= g_noteSemitoneRatio[note - A440_NOTE];
+
+			return result;
+		}
+#else
+#error Unknown temperament!
+#endif // #if EQUAL_TEMPERAMENT
+
+		void Update()
+		{
+			// Select the right ADC channel
+			//SelectADCChannel();
+
+			DEBUG_PRINT_STATEMENTS(Serial.write("DetermineSignalPitch"); Ln(););
+			float minSignalFrequency = -1.0f;
+			float maxSignalFrequency = -1.0f;
+			int signalMin = 0;
+			int signalMax = 0;
+			int maxCorrelationDipPercent = 0;
+			long dspTotalMs = -millis();
+			float instantFrequency = DetermineSignalPitch(minSignalFrequency, maxSignalFrequency, signalMin, signalMax, maxCorrelationDipPercent);
+
+			dspTotalMs += millis();
+#if FAKE_FREQUENCY
+			static float t = 0.0f;
+			t += 0.001f;
+			instantFrequency = 400.0f + 200.0f * sinf(t);
+#endif // #if FAKE_FREQUENCY
+			DEBUG_PRINT_STATEMENTS(PrintStringFloat("instantFrequency", instantFrequency); Ln(););
+
+			DEBUG_PRINT_STATEMENTS(Serial.write("GetMidiNoteIndexForFrequency"); Ln(););
+			m_tunerNote = GetMidiNoteIndexForFrequency(instantFrequency);
+			float centerDisplayFrequency = GetFrequencyForMidiNoteIndex(m_tunerNote);
+			float minDisplayFrequency = centerDisplayFrequency * FREQUENCY_FILTER_WINDOW_RATIO_DOWN;
+			float maxDisplayFrequency = centerDisplayFrequency * FREQUENCY_FILTER_WINDOW_RATIO_UP;
+
+			DEBUG_PRINT_STATEMENTS(Serial.write("instantFrequency"); Ln(););
+			if (instantFrequency >= 0.0f)
+			{
+				if ((m_filteredFrequency >= 0.0f) && (m_filteredFrequency >= minDisplayFrequency) && (m_filteredFrequency <= maxDisplayFrequency))
+				{
+					static float const RATE = 0.1f;
+					m_filteredFrequency = (1.0f - RATE) * m_filteredFrequency + (RATE * instantFrequency);
+				}
+				else
+				{
+					m_filteredFrequency = instantFrequency;
+				}
+			}
+			else
+			{
+				m_filteredFrequency = -1.0f;
+			}
+
+			//#if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL || PRINT_FREQUENCY_TO_SERIAL_VT100
+			//			DEBUG_PRINT_STATEMENTS(Serial.write("percent"); Ln(););
+			//			float percent = 0.0f;
+			//			if (m_filteredFrequency < centerDisplayFrequency)
+			//			{
+			//				percent = 0.5f * (m_filteredFrequency - minDisplayFrequency) / (centerDisplayFrequency - minDisplayFrequency);
+			//			}
+			//			else
+			//			{
+			//				percent = 0.5f + 0.5f * (m_filteredFrequency - centerDisplayFrequency) / (maxDisplayFrequency - centerDisplayFrequency);
+			//			}
+			//#endif // #if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL
+
+#if PRINT_FREQUENCY_TO_SERIAL
+#if PRINT_FREQUENCY_TO_SERIAL_VT100
+			MoveCursor(0, 0);
+			Serial.print("\x1B[0m");
+#endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
+			//Serial.print("-----"); Ln();
+			//float sps = 1000000.0f / deltaMicros;
+			//PrintStringFloat("SPS ", sps); Ln();
+			//PrintStringInt("ofs (int)", bestOffset); Ln();
+			//PrintStringFloat("ofs (float)", FIXED2F(bestOffset)); Ln();
+			//PrintStringInt("numCoarseCorrelations", numCoarseCorrelations); DEFAULT_PRINT->print("   "); Ln();
+			//PrintStringInt("numFineCorrelations", numFineCorrelations); DEFAULT_PRINT->print("   "); Ln();
+			//PrintStringFloat("Instant freq", instantFrequency); Ln();
+			DEFAULT_PRINT->print('r');
+			//float instantFrequency = 0.0f;
+			//float minSignalFrequency = 0.0f;
+			//float maxSignalFrequency = 0.0f;
+			//float signalMin = 0.0f;
+			//float signalMax = 0.0f;
+			//float dspTotalMs = 0.0f;
+			//float maxCorrelationDipPercent = 0.0f;
+			Serial.print(m_audioPin); Serial.print(COMMA_SEPARATOR);
+			PrintFloat(instantFrequency); Serial.print(COMMA_SEPARATOR);
+			PrintFloat(minSignalFrequency); Serial.print(COMMA_SEPARATOR);
+			PrintFloat(maxSignalFrequency); Serial.print(COMMA_SEPARATOR);
+			Serial.print(signalMin); Serial.print(COMMA_SEPARATOR);
+			Serial.print(signalMax); Serial.print(COMMA_SEPARATOR);
+			Serial.print(dspTotalMs); Serial.print(COMMA_SEPARATOR);
+			Serial.print(maxCorrelationDipPercent);
+			Ln();
+			//PrintStringFloat("Filtered freq", filteredFrequency); Ln();
+			//PrintStringInt("MIDI note", m_tunerNote); Ln();
+			//PrintStringFloat("MIDI frequency", centerFrequency); Ln();
+			//PrintStringFloat("Bottom frequency for note", minFrequency); Ln();
+			//PrintStringFloat("Top frequency for note", maxFrequency); Ln();
+			//PrintStringFloat("Percent note (50% is perfect)", percent); Ln();
+			//#if PRINT_FREQUENCY_TO_SERIAL_VT100
+			//			percent = Clamp(percent, 0.0f, 0.9999f);
+			//			const int numCharacters = 31;
+			//			const int centerCharacterIndex = numCharacters / 2;
+			//			int characterIndex = (percent * numCharacters);
+			//			const char* tunerCharacters[2][3] = {{"»", /*"·"*/"oCOMMA_SEPARATOR«"}, {"|COMMA_SEPARATOROCOMMA_SEPARATOR|"}};
+			//			for (int i = 0; i < numCharacters; ++i)
+			//			{
+			//				int leftRightSelector = sgn(i - centerCharacterIndex) + 1;
+			//				int onOffSelector = (i == characterIndex) ? 1 : 0;
+			//				Serial.print(tunerCharacters[onOffSelector][leftRightSelector]);
+			//			}
+			//			Serial.print(" ");
+			//			Ln();
+			//#endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
+#endif //#if PRINT_FREQUENCY_TO_SERIAL
+
+#if ENABLE_LCD
+			RenderWideGlyphForNote(m_tunerNote);
+
+			switch (m_mode)
+				{
+			case TunerMode::Tuner:
+			{
+				PrintCenterTick();
+				if (filteredFrequency > 0.0f)
+				{
+					LcdTick(percent);
+				}
+				else
+				{
+					LcdTick(-1);
+				}
+			}
+			break;
+			default:
+				break;
+			}
+#endif // #if ENABLE_LCD
+		}
+
 		bool m_enableDetailedSearch;
 		
 		int m_minFrequency;
@@ -1434,19 +1740,20 @@ public:
 		int m_baseOffsetStep;
 		int m_baseOffsetStepIncrement;
 
+		FourByteUnion m_a440;
+	
 	private:
 		int m_audioPin;
+		int m_tunerNote;
+		float m_filteredFrequency;
 	};
 
 	Tuner()
 #if ENABLE_LCD
 		, m_lcd(2, 3, 4, 5, 6, 7, 8)
 #endif // #if ENABLE_LCD
-		: m_tunerNote(-1)
-		, m_mode(TunerMode::Tuner)
+		: m_mode(TunerMode::Tuner)
 	{
-		m_a440.f = DEFAULT_A440;
-
 		for (int i = 0; i < NUM_CHANNELS; ++i)
 		{
 			m_channels[i].SetPin(i);
@@ -1613,163 +1920,6 @@ public:
 		}
 	}
 
-#if (TEMPERAMENT == EQUAL_TEMPERAMENT)
-	// Converts a fundamental frequency in Hz to a MIDI note index.  Slow.
-	int GetMidiNoteIndexForFrequency(float frequency)
-	{
-		if (frequency < 0.0f)
-		{
-			return -1;
-		}
-
-		// Shift the note down half a semitone so the frequency interval that maps to a MIDI note is centered on the note.
-		frequency *= QUARTERTONE_DOWN;
-
-		int note = A440_NOTE;
-		float a440 = m_a440.f;
-		float a440_2 = 2.0f * a440;
-		while (frequency < a440)
-		{
-			frequency *= 2.0f;
-			note -= 12;
-		}
-		while (frequency > a440_2)
-		{
-			frequency *= 0.5f;
-			note += 12;
-		}
-		while (frequency > a440)
-		{
-			frequency *= SEMITONE_DOWN;
-			note += 1;
-		}
-		return note;
-	}
-
-	// Compute the fundamental frequency of a given MIDI note index.  Slow.
-	float GetFrequencyForMidiNoteIndex(int note)
-	{
-		if (note < 0.0f)
-		{
-			return -1.0f;
-		}
-
-		float result = m_a440.f;
-		
-		while (note < A440_NOTE)
-		{
-			note += 12;
-			result *= 0.5f;
-		}
-		
-		while (note > A880_NOTE)
-		{
-			note -= 12;
-			result *= 2.0f;
-		}
-
-		while (note > A440_NOTE)
-		{
-			--note;
-			result *= SEMITONE_UP;
-		}
-
-		return result;
-	}
-#elif (TEMPERAMENT == JUST_TEMPERAMENT)
-	// Converts a fundamental frequency in Hz to a MIDI note index.  Slow.
-	int GetMidiNoteIndexForFrequency(float frequency)
-	{
-		DEBUG_PRINT_STATEMENTS(Serial.write("GetMidiNoteIndexForFrequency()"); Ln(););
-
-		if (frequency <= 0.0f)
-		{
-			DEBUG_PRINT_STATEMENTS(Serial.write("earlying out, freq is <= 0"); Ln(););
-			return -1;
-		}
-
-		// Shift the note down up a semitone so the frequency interval that maps to a MIDI note is centered on the note.
-		// (Algorithm here is different from the one for equal temperament, we have to shift in the other direction.)
-		frequency *= QUARTERTONE_UP;
-
-		DEBUG_PRINT_STATEMENTS(PrintStringFloat("Frequency", frequency); Ln(););
-
-		int note = A440_NOTE;
-		float a440 = m_a440.f;
-		float a440_2 = 2.0f * a440;
-		DEBUG_PRINT_STATEMENTS(PrintStringFloat("a440", a440); Ln(););
-		while (frequency < a440)
-		{
-			DEBUG_PRINT_STATEMENTS(Serial.write("Double up"); Ln(););
-			frequency *= 2.0f;
-			note -= 12;
-		}
-		while (frequency >= a440_2)
-		{
-			DEBUG_PRINT_STATEMENTS(Serial.write("Double down"); Ln(););
-			frequency *= 0.5f;
-			note += 12;
-		}
-
-		DEBUG_PRINT_STATEMENTS(PrintStringFloat("Centered frequency", frequency); Ln(););
-
-		auto rangeIndex = 0;
-		float rangeHigh = g_noteSemitoneRatio[rangeIndex] * a440;
-		float rangeLow = -1.0f;
-		for (;;)
-		{
-			rangeLow = rangeHigh;
-			++rangeIndex;
-			rangeHigh = g_noteSemitoneRatio[rangeIndex] * a440;
-			DEBUG_PRINT_STATEMENTS(
-			{
-				PrintStringFloat("rangeLow", rangeLow); Ln();
-				PrintStringFloat("rangeHigh", rangeHigh); Ln();
-			});
-			if ((frequency >= rangeLow) && (frequency < rangeHigh))
-			{
-				DEBUG_PRINT_STATEMENTS(PrintStringFloat("found note!", rangeHigh); Ln(););
-				break;
-			}
-			++note;
-			DEBUG_PRINT_STATEMENTS(PrintStringInt("note", note); Ln(););
-		}
-		DEBUG_PRINT_STATEMENTS(PrintStringInt("Final note", note); Ln(););
-		return note;
-	}
-
-	// Compute the fundamental frequency of a given MIDI note index.  Slow.
-	float GetFrequencyForMidiNoteIndex(int note)
-	{
-		DEBUG_PRINT_STATEMENTS( Serial.write("GetFrequencyForMidiNoteIndex()"); Ln(); );
-
-		if (note < 0.0f)
-		{
-			return -1.0f;
-		}
-
-		float result = m_a440.f;
-
-		while (note < A440_NOTE)
-		{
-			note += 12;
-			result *= 0.5f;
-		}
-
-		while (note > A880_NOTE)
-		{
-			note -= 12;
-			result *= 2.0f;
-		}
-
-		result *= g_noteSemitoneRatio[note - A440_NOTE];
-
-		return result;
-	}
-#else
-#error Unknown temperament!
-#endif // #if EQUAL_TEMPERAMENT
-
 	void RenderWideGlyphForNote(int note)
 	{
 #if ENABLE_LCD
@@ -1916,8 +2066,6 @@ public:
 		ClearScreen();
 #endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
 
-		float filteredFrequency = -1.0f;
-
 		int activeChannelIndex = 0;
 
 		while(1)
@@ -2049,157 +2197,16 @@ public:
 			m_lcd.home();
 #endif // #if ENABLE_LCD
 
-			DEBUG_PRINT_STATEMENTS(Serial.write("DetermineSignalPitch"); Ln(););
-			//Fixed bestOffset;
-			//int numCoarseCorrelations = 0;
-			//int numFineCorrelations = 0;
-			//s_correlationStep = 2;
-			//float instantFrequency = m_channels[0].DetermineSignalPitch(bestOffset, numCoarseCorrelations, numFineCorrelations);
-			//Fixed bestOffset2;
-			//float instantFrequency2;
-			//s_correlationStep = 32;
-			//instantFrequency2 = m_channels[0].DetermineSignalPitch(bestOffset2, numCoarseCorrelations, numFineCorrelations);
-			//Fixed bestOffset3;
-			//float instantFrequency3;
-			//s_correlationStep = 64;
-			//instantFrequency3 = m_channels[0].DetermineSignalPitch(bestOffset3, numCoarseCorrelations, numFineCorrelations);
-			//Fixed bestOffset4;
-			//float instantFrequency4;
-			//s_correlationStep = 128;
-			//instantFrequency4 = m_channels[0].DetermineSignalPitch(bestOffset4, numCoarseCorrelations, numFineCorrelations);
-			float minSignalFrequency = -1.0f;
-			float maxSignalFrequency = -1.0f;
-            int signalMin = 0;
-            int signalMax = 0;
-			int maxCorrelationDipPercent = 0;
-			long dspTotalMs = -millis();
-			float instantFrequency = m_channels[0].DetermineSignalPitch(minSignalFrequency, maxSignalFrequency, signalMin, signalMax, maxCorrelationDipPercent);
-			dspTotalMs += millis();
-#if FAKE_FREQUENCY
-			static float t = 0.0f;
-			t += 0.001f;
-			instantFrequency = 400.0f + 200.0f * sinf(t);
-#endif // #if FAKE_FREQUENCY
-			DEBUG_PRINT_STATEMENTS(PrintStringFloat("instantFrequency", instantFrequency); Ln(););
-
-			DEBUG_PRINT_STATEMENTS(Serial.write("GetMidiNoteIndexForFrequency"); Ln(););
-			m_tunerNote = GetMidiNoteIndexForFrequency(instantFrequency);
-			float centerDisplayFrequency = GetFrequencyForMidiNoteIndex(m_tunerNote);
-			float minDisplayFrequency = centerDisplayFrequency * FREQUENCY_FILTER_WINDOW_RATIO_DOWN;
-			float maxDisplayFrequency = centerDisplayFrequency * FREQUENCY_FILTER_WINDOW_RATIO_UP;
-
-			DEBUG_PRINT_STATEMENTS(Serial.write("instantFrequency"); Ln(););
-			if (instantFrequency >= 0.0f)
+			for (unsigned int i = 0; i < ARRAY_COUNT(m_channels); ++i)
 			{
-				if ((filteredFrequency >= 0.0f) && (filteredFrequency >= minDisplayFrequency) && (filteredFrequency <= maxDisplayFrequency))
-				{
-					static float const RATE = 0.1f;
-					filteredFrequency = (1.0f - RATE) * filteredFrequency + (RATE * instantFrequency);
-				}
-				else
-				{
-					filteredFrequency = instantFrequency;
-				}
+				m_channels[i].m_a440 = m_a440;
+				m_channels[i].Update();
 			}
-			else
-			{
-				filteredFrequency = -1.0f;
-			}
-
-//#if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL || PRINT_FREQUENCY_TO_SERIAL_VT100
-//			DEBUG_PRINT_STATEMENTS(Serial.write("percent"); Ln(););
-//			float percent = 0.0f;
-//			if (filteredFrequency < centerDisplayFrequency)
-//			{
-//				percent = 0.5f * (filteredFrequency - minDisplayFrequency) / (centerDisplayFrequency - minDisplayFrequency);
-//			}
-//			else
-//			{
-//				percent = 0.5f + 0.5f * (filteredFrequency - centerDisplayFrequency) / (maxDisplayFrequency - centerDisplayFrequency);
-//			}
-//#endif // #if ENABLE_LCD || PRINT_FREQUENCY_TO_SERIAL
-
-#if ENABLE_LCD
-			RenderWideGlyphForNote(m_tunerNote);
-
-			switch(m_mode)
-			{
-			case TunerMode::Tuner:
-				{
-					PrintCenterTick();
-					if (filteredFrequency > 0.0f)
-					{
-						LcdTick(percent);
-					}
-					else
-					{
-						LcdTick(-1);
-					}
-				}
-				break;
-			default:
-				break;
-			}
-#endif // #if ENABLE_LCD
 
 			unsigned long nowMicros = micros();
 			//unsigned long deltaMicros = nowMicros - m_lastMicros;
 
 			m_lastMicros = nowMicros;
-
-#if PRINT_FREQUENCY_TO_SERIAL
-#if PRINT_FREQUENCY_TO_SERIAL_VT100
-			MoveCursor(0, 0);
-			Serial.print("\x1B[0m");
-#endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
-			//Serial.print("-----"); Ln();
-            //float sps = 1000000.0f / deltaMicros;
-            //PrintStringFloat("SPS ", sps); Ln();
-			//PrintStringInt("ofs (int)", bestOffset); Ln();
-			//PrintStringFloat("ofs (float)", FIXED2F(bestOffset)); Ln();
-			//PrintStringInt("numCoarseCorrelations", numCoarseCorrelations); DEFAULT_PRINT->print("   "); Ln();
-			//PrintStringInt("numFineCorrelations", numFineCorrelations); DEFAULT_PRINT->print("   "); Ln();
-			//PrintStringFloat("Instant freq", instantFrequency); Ln();
-			DEFAULT_PRINT->print('r');
-			PrintFloat(instantFrequency); Serial.print(COMMA_SEPARATOR);
-            PrintFloat(minSignalFrequency); Serial.print(COMMA_SEPARATOR);
-            PrintFloat(maxSignalFrequency); Serial.print(COMMA_SEPARATOR);
-			Serial.print(signalMin); Serial.print(COMMA_SEPARATOR);
-			Serial.print(signalMax); Serial.print(COMMA_SEPARATOR);
-			Serial.print(dspTotalMs); Serial.print(COMMA_SEPARATOR);
-			Serial.print(maxCorrelationDipPercent);
-			Ln();
-			//Serial.print("#Line 1"); Ln();
-			//Serial.print("#Line 2"); Ln();
-			//Serial.print("#Line 3"); Ln();
-			//PrintStringInt("ofs2", bestOffset2); Ln();
-			//PrintStringFloat("Instant freq 2", instantFrequency2); Ln();
-			//PrintStringInt("ofs3", bestOffset3); Ln();
-			//PrintStringFloat("Instant freq 3", instantFrequency3); Ln();
-			//PrintStringInt("ofs4", bestOffset4); Ln();
-			//PrintStringFloat("Instant freq 4", instantFrequency4); Ln();
-			//PrintStringFloat("Filtered freq", filteredFrequency); Ln();
-			//PrintStringInt("MIDI note", m_tunerNote); Ln();
-			//PrintStringFloat("MIDI frequency", centerFrequency); Ln();
-			//PrintStringFloat("Bottom frequency for note", minFrequency); Ln();
-			//PrintStringFloat("Top frequency for note", maxFrequency); Ln();
-			//PrintStringFloat("Percent note (50% is perfect)", percent); Ln();
-//#if PRINT_FREQUENCY_TO_SERIAL_VT100
-//			percent = Clamp(percent, 0.0f, 0.9999f);
-//			const int numCharacters = 31;
-//			const int centerCharacterIndex = numCharacters / 2;
-//			int characterIndex = (percent * numCharacters);
-//			const char* tunerCharacters[2][3] = {{"»", /*"·"*/"oCOMMA_SEPARATOR«"}, {"|COMMA_SEPARATOROCOMMA_SEPARATOR|"}};
-//			for (int i = 0; i < numCharacters; ++i)
-//			{
-//				int leftRightSelector = sgn(i - centerCharacterIndex) + 1;
-//				int onOffSelector = (i == characterIndex) ? 1 : 0;
-//				Serial.print(tunerCharacters[onOffSelector][leftRightSelector]);
-//			}
-//			Serial.print(" ");
-//			Ln();
-//#endif // #if PRINT_FREQUENCY_TO_SERIAL_VT100
-#endif //#if PRINT_FREQUENCY_TO_SERIAL
 		}
 
 		Stop();
@@ -2211,14 +2218,8 @@ private:
 #endif // #if ENABLE_LCD
 	int m_lastLcdTickX;
 	
-	union
-	{
-		unsigned long ul;
-		float f;
-	} m_a440;
-	STATIC_ASSERT(sizeof(unsigned long) == sizeof(float)); // verify that things match up for the above union
-	
-	int m_tunerNote;
+	FourByteUnion m_a440;
+
 	TunerMode::Type m_mode;
 
 	Channel m_channels[NUM_CHANNELS];
