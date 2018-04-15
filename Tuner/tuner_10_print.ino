@@ -1,7 +1,3 @@
-#pragma once
-
-#define DEFAULT_PRINT (&Serial)
-
 void Ln(Print* p = DEFAULT_PRINT)
 {
     p->println("");

@@ -1,7 +1,3 @@
-#pragma once
-
-#include "tuner_print.h"
-
 static unsigned long const kTimer0Prescaler = 64; // see wiring.c
 extern unsigned long volatile timer0_overflow_count;
 class HighResTimer
