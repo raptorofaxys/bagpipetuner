@@ -9,6 +9,10 @@ This version of the code is meant for a bagpipe tuner designed by Matthew Beall.
 -it has about double the precision over 2-3x the frequency range
 -it has no support for LCD or MIDI mode.
 
+Note that the code organization of this project is not so great - lots of non-inline functions in headers and stuff -
+because it grew organically from waaaaay back when Arduino didn't support multi-file compilation. I haven't yet gone
+back to reorganize everything in a modern way.
+
 This is released under the Attribution-NonCommercial 3.0 Unported Creative Commons license:
 http://creativecommons.org/licenses/by-nc/3.0/
 
@@ -27,72 +31,17 @@ http://recherche.ircam.fr/equipes/pcm/cheveign/pss/2002_JASA_YIN.pdf
 
 #include <avr/pgmspace.h>
 #include <EEPROM.h>
+#include <inttypes.h>
+#include "Print.h"
 
-#define ASSERT(x) \
-	if (!x) \
-	{ \
-		while (1) \
-		{ \
-			Blink(); \
-		} \
-	}
-
-// Useful to print compile-time integer values, since instanciating a template with this incomplete type will
-// cause the compiler to include the value of N in the error message.  (On avr-gcc, this seems to only work
-// with free-standing variables, not members.)
-template<int N> struct PrintInt;
-
-// This is a very naive way of writing a static assertion facility, but avr-gcc is *very* far from compliant - it
-// will allow all sorts of illegal constructs - and my patience is running out. :P  Even though this will generate
-// a bit of code, it can hopefully be trivially stripped.
-#define STATIC_ASSERT3(x, line) void func##line(static_assert_<x>) { }
-#define STATIC_ASSERT2(x, line) STATIC_ASSERT3(x, line)
-#define STATIC_ASSERT(x) STATIC_ASSERT2((x), __LINE__)
-template <bool N> struct static_assert_;
-template<> struct static_assert_<true> {};
-
-// template <typename T> struct Identity { typedef T value; }; 
-
-// template <typename T>
-// T Clamp(T v, typename Identity<T>::value min_, typename Identity<T>::value max_)
-// {
-// 	return std::min(std::max(v, min_), max_);
-// }
-
-float Clamp(float v, float min_, float max_)
-{
-	return min(max(v, min_), max_);
-}
-
-// from http://stackoverflow.com/questions/1903954/is-there-a-standard-sign-function-signum-sgn-in-c-c
-template <typename T> int sgn(T val)
-{
-    return (T(0) < val) - (val < T(0));
-}
-
-// from wiring_private.h
-#ifndef cbi
-#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
-#endif
-#ifndef sbi
-#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
-#endif 
-
-// from pins_arduino.h
-//extern const uint8_t PROGMEM port_to_input_PGM[];
-extern const uint8_t PROGMEM digital_pin_to_port_PGM[];
-extern const uint8_t PROGMEM digital_pin_to_bit_mask_PGM[];
-extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
-#define digitalPinToPort(P) ( pgm_read_byte( digital_pin_to_port_PGM + (P) ) )
-#define digitalPinToBitMask(P) ( pgm_read_byte( digital_pin_to_bit_mask_PGM + (P) ) )
-#define digitalPinToTimer(P) ( pgm_read_byte( digital_pin_to_timer_PGM + (P) ) )
-//#define portInputRegister(P) ( (volatile uint8_t *)( pgm_read_byte( port_to_input_PGM + (P))) )
+#include "tuner_utils.h"
+#include "tuner_print.h"
+#include "tuner_profiler.h"
 
 #define ENABLE_STARTUP_MESSAGE 0
 #define ENABLE_BUTTON_INPUTS 0
-#define ENABLE_DEBUG_PRINT_STATEMENTS 0
-//#define Serial _SERIAL_FAIL_
 
+#define ENABLE_DEBUG_PRINT_STATEMENTS 0
 #if ENABLE_DEBUG_PRINT_STATEMENTS
 #define DEBUG_PRINT_STATEMENTS(x) x
 #else
@@ -110,144 +59,7 @@ static int const kStatusPin2 = 12;
 static int const kPitchDownButtonPin = 9;
 static int const kPitchUpButtonPin = 10;
 
-#include <inttypes.h>
-#include "Print.h"
-
-///////////////////////////////////////////////////////////////////////////////
-// Utility stuff
-///////////////////////////////////////////////////////////////////////////////
-
-const int INT_MIN = (1 << (sizeof(int) * 8 - 1));
-const int INT_MAX = (~INT_MIN);  
-
-// From http://www.arduino.cc/playground/Code/AvailableMemory
-// This function will return the number of bytes currently free in RAM.
-// written by David A. Mellis
-// based on code by Rob Faludi http://www.faludi.com
-// (reformatted for clarity)
-// Note: I believe this does not work on recent versions of the Arduino environment.
-// See the webpage above for alternatives.
-int AvailableMemory()
-{
-	int size = 1024;
-	byte* buf;
-
-	while ((buf = (byte *) malloc(--size)) == NULL)
-		;
-
-	free(buf);
-
-	return size;
-}
-
-#define DEFAULT_PRINT (&Serial)
-
-void Ln(Print* p = DEFAULT_PRINT)
-{
-	p->println("");
-}
-
-void ClearScreen(Print* p = DEFAULT_PRINT)
-{
-	p->print("\x1B[2J");
-}
-
-void MoveCursor(int x, int y, Print* p = DEFAULT_PRINT)
-{
-	p->print("\x1B[");
-	p->print(y + 1);
-	p->print(";");
-	p->print(x + 1);
-	p->print("H");
-}
-
-void Space(Print* p = DEFAULT_PRINT)
-{
-	p->print(" ");
-}
-
-void Cls(Print* p = DEFAULT_PRINT)
-{
-	p->print(char(27));
-	p->print("[2J");
-}
-
-void PrintFloat(float f, int decimals = 10, Print* p = DEFAULT_PRINT)
-{
-	if (f < 0)
-	{
-		p->print("-");
-		f = -f;
-	}
-	else
-	{
-		p->print(" ");
-	}
-	
-	int b = int(f);
-	p->print(b);
-	p->print(".");
-	f -= b;
-	for (int i = 0; i < decimals; ++i)
-	{
-		f *= 10.0f;
-		int a = int(f);
-		p->print(a);
-		f -= a;
-	}
-}
-
-void PrintHex(int h, Print* p = DEFAULT_PRINT)
-{
-	static char const* hex = "0123456789ABCDEF";
-	p->print(hex[(h & 0xF000) >> 12]);
-	p->print(hex[(h & 0x0F00) >> 8]);
-	p->print(hex[(h & 0x00F0) >> 4]);
-	p->print(hex[(h & 0x000F) >> 0]);
-}
-
-void PrintStringInt(char const* s, int v, Print* p = DEFAULT_PRINT)
-{
-	p->print(s);
-	p->print(": ");
-	p->print(v);
-}
-
-void PrintStringLong(char const* s, long v, Print* p = DEFAULT_PRINT)
-{
-	p->print(s);
-	p->print(": ");
-	p->print(v);
-}
-
-void PrintStringFloat(char const* s, float f, int decimals = 5, Print* p = DEFAULT_PRINT)
-{
-	p->print(s);
-	p->print(": ");
-	if (f < 10000.0f)
-	{
-		p->print(" ");
-	}
-	if (f < 1000.0f)
-	{
-		p->print(" ");
-	}
-	if (f < 100.0f)
-	{
-		p->print(" ");
-	}
-	if (f < 10.0f)
-	{
-		p->print(" ");
-	}
-	PrintFloat(f, decimals);
-}
-
-//@TODO: break all the utility stuff up into headers and move this include back to the top; the ScopeProfiler depends on print utilities
-#include "tuner_utils.h"
-
 const int kDebounceMs = 50;
-
 void Blink(int times = 1)
 {
 	for (int i = 0; i < times; ++i)

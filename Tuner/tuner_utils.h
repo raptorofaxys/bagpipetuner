@@ -1,119 +1,87 @@
+#pragma once
+
 #define ARRAY_COUNT(x) (sizeof(x) / sizeof(x[0]))
 
 #define assert(x) if (!(x)) { Halt(__LINE__); }
 #define HALT() Halt(__LINE__)
-void Halt(int line)
+inline void Halt(int line)
 {
 	Serial.print("Halt: L");
 	Serial.println(line);
 	for (;;) {}
 }
 
-#define ENABLE_LOCATION_TRACING 0
-#if ENABLE_LOCATION_TRACING
-#define TRACELINE() TraceLine(__LINE__)
-void TraceLine(long line)
+#define ASSERT(x) \
+	if (!x) \
+	{ \
+		while (1) \
+		{ \
+			Blink(); \
+		} \
+	}
+
+// Useful to print compile-time integer values, since instanciating a template with this incomplete type will
+// cause the compiler to include the value of N in the error message.  (On avr-gcc, this seems to only work
+// with free-standing variables, not members.)
+template<int N> struct PrintInt;
+
+// This is a very naive way of writing a static assertion facility, but avr-gcc is *very* far from compliant - it
+// will allow all sorts of illegal constructs - and my patience is running out. :P  Even though this will generate
+// a bit of code, it can hopefully be trivially stripped.
+#define STATIC_ASSERT3(x, line) void func##line(static_assert_<x>) { }
+#define STATIC_ASSERT2(x, line) STATIC_ASSERT3(x, line)
+#define STATIC_ASSERT(x) STATIC_ASSERT2((x), __LINE__)
+template <bool N> struct static_assert_;
+template<> struct static_assert_<true> {};
+
+float Clamp(float v, float min_, float max_)
 {
-	Serial.print("T");
-	Serial.print(line);
-	Serial.println();
+    return min(max(v, min_), max_);
 }
-#else
-#define TRACELINE()
+
+// from http://stackoverflow.com/questions/1903954/is-there-a-standard-sign-function-signum-sgn-in-c-c
+template <typename T> int sgn(T val)
+{
+    return (T(0) < val) - (val < T(0));
+}
+
+// from wiring_private.h
+#ifndef cbi
+#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
 #endif
+#ifndef sbi
+#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
+#endif 
 
-static unsigned long const kTimer0Prescaler = 64; // see wiring.c
-extern unsigned long volatile timer0_overflow_count;
-class HighResTimer
+// from pins_arduino.h
+//extern const uint8_t PROGMEM port_to_input_PGM[];
+extern const uint8_t PROGMEM digital_pin_to_port_PGM[];
+extern const uint8_t PROGMEM digital_pin_to_bit_mask_PGM[];
+extern const uint8_t PROGMEM digital_pin_to_timer_PGM[];
+#define digitalPinToPort(P) ( pgm_read_byte( digital_pin_to_port_PGM + (P) ) )
+#define digitalPinToBitMask(P) ( pgm_read_byte( digital_pin_to_bit_mask_PGM + (P) ) )
+#define digitalPinToTimer(P) ( pgm_read_byte( digital_pin_to_timer_PGM + (P) ) )
+//#define portInputRegister(P) ( (volatile uint8_t *)( pgm_read_byte( port_to_input_PGM + (P))) )
+
+const int INT_MIN = (1 << (sizeof(int) * 8 - 1));
+const int INT_MAX = (~INT_MIN);
+
+// From http://www.arduino.cc/playground/Code/AvailableMemory
+// This function will return the number of bytes currently free in RAM.
+// written by David A. Mellis
+// based on code by Rob Faludi http://www.faludi.com
+// (reformatted for clarity)
+// Note: I believe this does not work on recent versions of the Arduino environment.
+// See the webpage above for alternatives.
+inline int AvailableMemory()
 {
-public:
-	void Start()
-	{
-		m_startTimer0 = TCNT0;
-		m_startOverflowTimer0 = timer0_overflow_count; // see wiring.c
-	}
-	
-	void Stop()
-	{
-		m_stopTimer0 = TCNT0;
-		m_stopOverflowTimer0 = timer0_overflow_count; // see wiring.c
-	}
-	
-	unsigned long GetCycles()
-	{
-		// we don't handle overflow wraparound; neither does millis(); would wrap around after approx. 51 days (according to my quite possibly erroneous calculations)
-		return
-			(m_stopTimer0 - m_startTimer0) * kTimer0Prescaler
-			+ (m_stopOverflowTimer0 - m_startOverflowTimer0) * 256 * kTimer0Prescaler;
-	}
-	
-	float GetSeconds()
-	{
-		return float(GetCycles()) / F_CPU;
-	}
+    int size = 1024;
+    byte* buf;
 
-	//void PrintDebug()
-	//{
-	//	PrintStringInt("this", (unsigned long) (this));
-	//	PrintStringInt("a0", m_startTimer0);
-	//	PrintStringInt(" b0", m_stopTimer0);
-	//	PrintStringInt(" ao0", m_startOverflowTimer0);
-	//	PrintStringInt(" ab0", m_stopOverflowTimer0);
-	//}
-	
-//private:
-	unsigned char m_startTimer0;
-	unsigned char m_stopTimer0;
-	unsigned long m_startOverflowTimer0;
-	unsigned long m_stopOverflowTimer0;
-};
+    while ((buf = (byte *)malloc(--size)) == NULL)
+        ;
 
-class ScopeProfiler 
-{
-public:
-	ScopeProfiler(const char* name, int times)
-		: m_name(name)
-		, m_line(-1)
-		, m_times(times)
-	{
-		m_timer.Start();
-	}
+    free(buf);
 
-	ScopeProfiler(int line, int times)
-		: m_name(NULL)
-		, m_line(line)
-		, m_times(times)
-	{
-		m_timer.Start();
-	}
-
-	~ScopeProfiler()
-	{
-		m_timer.Stop();
-		if (m_name)
-		{
-			Serial.print(m_name);
-		}
-		else
-		{
-			Serial.print('L');
-			Serial.print(m_line);
-		}
-		Serial.print(": ");
-		PrintFloat(static_cast<float>(m_timer.GetCycles()) / m_times);
-		Serial.print("c / ");
-		PrintFloat(static_cast<float>(m_timer.GetSeconds()) / m_times, 10);
-		Serial.print("s ");
-		//m_timer.PrintDebug();
-		Ln();
-	}
-//private:
-	const char* m_name;
-	int m_line;
-	HighResTimer m_timer;
-	int m_times;
-};
-#define PROFILE_COUNT 3000
-#define PROFILE_STATEMENT(x) { ScopeProfiler t(#x, PROFILE_COUNT); for (uint16_t i = 0; i < PROFILE_COUNT; ++i) { x; } }
-#define PROFILE_STATEMENT_LINE(x) { ScopeProfiler t(__LINE__, PROFILE_COUNT); for (uint16_t i = 0; i < PROFILE_COUNT; ++i) { x; } }
-#define PROFILE_STATEMENT_LINE_NOP(x)
+    return size;
+}
