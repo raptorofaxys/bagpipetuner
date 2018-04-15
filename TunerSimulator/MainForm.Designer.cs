@@ -50,14 +50,14 @@
             this.lblBosi = new System.Windows.Forms.Label();
             this.btnQuickTest = new System.Windows.Forms.Button();
             this.lblMisc = new System.Windows.Forms.Label();
-            this.tunerChannelDisplay4 = new TunerSimulator.TunerChannelDisplay();
-            this.tunerChannelDisplay3 = new TunerSimulator.TunerChannelDisplay();
-            this.tunerChannelDisplay2 = new TunerSimulator.TunerChannelDisplay();
-            this.tunerChannelDisplay1 = new TunerSimulator.TunerChannelDisplay();
             this.tunerChannelControl4 = new TunerSimulator.TunerChannelControl();
             this.tunerChannelControl3 = new TunerSimulator.TunerChannelControl();
             this.tunerChannelControl2 = new TunerSimulator.TunerChannelControl();
             this.tunerChannelControl1 = new TunerSimulator.TunerChannelControl();
+            this.tunerChannelDisplay1 = new TunerSimulator.TunerChannelDisplay();
+            this.tunerChannelDisplay2 = new TunerSimulator.TunerChannelDisplay();
+            this.tunerChannelDisplay3 = new TunerSimulator.TunerChannelDisplay();
+            this.tunerChannelDisplay4 = new TunerSimulator.TunerChannelDisplay();
             this.gbDumping.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -82,12 +82,12 @@
             | System.Windows.Forms.AnchorStyles.Left)));
             this.pnlSamples.Location = new System.Drawing.Point(15, 33);
             this.pnlSamples.Name = "pnlSamples";
-            this.pnlSamples.Size = new System.Drawing.Size(493, 506);
+            this.pnlSamples.Size = new System.Drawing.Size(493, 590);
             this.pnlSamples.TabIndex = 1;
             // 
             // btnFullTest
             // 
-            this.btnFullTest.Location = new System.Drawing.Point(522, 426);
+            this.btnFullTest.Location = new System.Drawing.Point(514, 593);
             this.btnFullTest.Name = "btnFullTest";
             this.btnFullTest.Size = new System.Drawing.Size(75, 23);
             this.btnFullTest.TabIndex = 2;
@@ -129,10 +129,10 @@
             this.gbDumping.Controls.Add(this.lblMinDumpFrequency);
             this.gbDumping.Controls.Add(this.txtMinDumpFrequency);
             this.gbDumping.Controls.Add(this.chkDumpOnNull);
-            this.gbDumping.Location = new System.Drawing.Point(522, 303);
-            this.gbDumping.Margin = new System.Windows.Forms.Padding(1, 1, 1, 1);
+            this.gbDumping.Location = new System.Drawing.Point(514, 470);
+            this.gbDumping.Margin = new System.Windows.Forms.Padding(1);
             this.gbDumping.Name = "gbDumping";
-            this.gbDumping.Padding = new System.Windows.Forms.Padding(1, 1, 1, 1);
+            this.gbDumping.Padding = new System.Windows.Forms.Padding(1);
             this.gbDumping.Size = new System.Drawing.Size(208, 119);
             this.gbDumping.TabIndex = 10;
             this.gbDumping.TabStop = false;
@@ -248,7 +248,7 @@
             // 
             // btnQuickTest
             // 
-            this.btnQuickTest.Location = new System.Drawing.Point(603, 426);
+            this.btnQuickTest.Location = new System.Drawing.Point(595, 593);
             this.btnQuickTest.Name = "btnQuickTest";
             this.btnQuickTest.Size = new System.Drawing.Size(75, 23);
             this.btnQuickTest.TabIndex = 22;
@@ -265,54 +265,6 @@
             this.lblMisc.Size = new System.Drawing.Size(51, 13);
             this.lblMisc.TabIndex = 24;
             this.lblMisc.Text = "XXXX ms";
-            // 
-            // tunerChannelDisplay4
-            // 
-            this.tunerChannelDisplay4.CenterFrequency = 0F;
-            this.tunerChannelDisplay4.FilteredFrequency = 0F;
-            this.tunerChannelDisplay4.InstantFrequency = 0F;
-            this.tunerChannelDisplay4.Location = new System.Drawing.Point(515, 285);
-            this.tunerChannelDisplay4.MaxFrequency = 0F;
-            this.tunerChannelDisplay4.MinFrequency = 0F;
-            this.tunerChannelDisplay4.Name = "tunerChannelDisplay4";
-            this.tunerChannelDisplay4.Size = new System.Drawing.Size(339, 14);
-            this.tunerChannelDisplay4.TabIndex = 28;
-            // 
-            // tunerChannelDisplay3
-            // 
-            this.tunerChannelDisplay3.CenterFrequency = 0F;
-            this.tunerChannelDisplay3.FilteredFrequency = 0F;
-            this.tunerChannelDisplay3.InstantFrequency = 0F;
-            this.tunerChannelDisplay3.Location = new System.Drawing.Point(515, 265);
-            this.tunerChannelDisplay3.MaxFrequency = 0F;
-            this.tunerChannelDisplay3.MinFrequency = 0F;
-            this.tunerChannelDisplay3.Name = "tunerChannelDisplay3";
-            this.tunerChannelDisplay3.Size = new System.Drawing.Size(339, 14);
-            this.tunerChannelDisplay3.TabIndex = 27;
-            // 
-            // tunerChannelDisplay2
-            // 
-            this.tunerChannelDisplay2.CenterFrequency = 0F;
-            this.tunerChannelDisplay2.FilteredFrequency = 0F;
-            this.tunerChannelDisplay2.InstantFrequency = 0F;
-            this.tunerChannelDisplay2.Location = new System.Drawing.Point(515, 245);
-            this.tunerChannelDisplay2.MaxFrequency = 0F;
-            this.tunerChannelDisplay2.MinFrequency = 0F;
-            this.tunerChannelDisplay2.Name = "tunerChannelDisplay2";
-            this.tunerChannelDisplay2.Size = new System.Drawing.Size(339, 14);
-            this.tunerChannelDisplay2.TabIndex = 26;
-            // 
-            // tunerChannelDisplay1
-            // 
-            this.tunerChannelDisplay1.CenterFrequency = 0F;
-            this.tunerChannelDisplay1.FilteredFrequency = 0F;
-            this.tunerChannelDisplay1.InstantFrequency = 0F;
-            this.tunerChannelDisplay1.Location = new System.Drawing.Point(515, 225);
-            this.tunerChannelDisplay1.MaxFrequency = 0F;
-            this.tunerChannelDisplay1.MinFrequency = 0F;
-            this.tunerChannelDisplay1.Name = "tunerChannelDisplay1";
-            this.tunerChannelDisplay1.Size = new System.Drawing.Size(339, 14);
-            this.tunerChannelDisplay1.TabIndex = 25;
             // 
             // tunerChannelControl4
             // 
@@ -362,11 +314,59 @@
             this.tunerChannelControl1.TabIndex = 12;
             this.tunerChannelControl1.ConfigurationChanged += new System.EventHandler(this.tunerChannelControl_ConfigurationChanged);
             // 
+            // tunerChannelDisplay1
+            // 
+            this.tunerChannelDisplay1.CenterFrequency = 0F;
+            this.tunerChannelDisplay1.FilteredFrequency = 0F;
+            this.tunerChannelDisplay1.InstantFrequency = 0F;
+            this.tunerChannelDisplay1.Location = new System.Drawing.Point(514, 224);
+            this.tunerChannelDisplay1.MaxFrequency = 0F;
+            this.tunerChannelDisplay1.MinFrequency = 0F;
+            this.tunerChannelDisplay1.Name = "tunerChannelDisplay1";
+            this.tunerChannelDisplay1.Size = new System.Drawing.Size(339, 56);
+            this.tunerChannelDisplay1.TabIndex = 25;
+            // 
+            // tunerChannelDisplay2
+            // 
+            this.tunerChannelDisplay2.CenterFrequency = 0F;
+            this.tunerChannelDisplay2.FilteredFrequency = 0F;
+            this.tunerChannelDisplay2.InstantFrequency = 0F;
+            this.tunerChannelDisplay2.Location = new System.Drawing.Point(514, 286);
+            this.tunerChannelDisplay2.MaxFrequency = 0F;
+            this.tunerChannelDisplay2.MinFrequency = 0F;
+            this.tunerChannelDisplay2.Name = "tunerChannelDisplay2";
+            this.tunerChannelDisplay2.Size = new System.Drawing.Size(339, 56);
+            this.tunerChannelDisplay2.TabIndex = 26;
+            // 
+            // tunerChannelDisplay3
+            // 
+            this.tunerChannelDisplay3.CenterFrequency = 0F;
+            this.tunerChannelDisplay3.FilteredFrequency = 0F;
+            this.tunerChannelDisplay3.InstantFrequency = 0F;
+            this.tunerChannelDisplay3.Location = new System.Drawing.Point(514, 348);
+            this.tunerChannelDisplay3.MaxFrequency = 0F;
+            this.tunerChannelDisplay3.MinFrequency = 0F;
+            this.tunerChannelDisplay3.Name = "tunerChannelDisplay3";
+            this.tunerChannelDisplay3.Size = new System.Drawing.Size(339, 56);
+            this.tunerChannelDisplay3.TabIndex = 27;
+            // 
+            // tunerChannelDisplay4
+            // 
+            this.tunerChannelDisplay4.CenterFrequency = 0F;
+            this.tunerChannelDisplay4.FilteredFrequency = 0F;
+            this.tunerChannelDisplay4.InstantFrequency = 0F;
+            this.tunerChannelDisplay4.Location = new System.Drawing.Point(514, 410);
+            this.tunerChannelDisplay4.MaxFrequency = 0F;
+            this.tunerChannelDisplay4.MinFrequency = 0F;
+            this.tunerChannelDisplay4.Name = "tunerChannelDisplay4";
+            this.tunerChannelDisplay4.Size = new System.Drawing.Size(339, 56);
+            this.tunerChannelDisplay4.TabIndex = 28;
+            // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(868, 551);
+            this.ClientSize = new System.Drawing.Size(870, 635);
             this.Controls.Add(this.tunerChannelDisplay4);
             this.Controls.Add(this.tunerChannelDisplay3);
             this.Controls.Add(this.tunerChannelDisplay2);

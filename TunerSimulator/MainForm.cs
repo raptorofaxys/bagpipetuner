@@ -278,12 +278,7 @@ namespace TunerSimulator
 
             if ((tr.ChannelIndex >= 0) && (tr.ChannelIndex < m_channelDisplays.Length))
             {
-                var cd = m_channelDisplays[tr.ChannelIndex];
-                cd.InstantFrequency = tr.InstantFrequency;
-                cd.FilteredFrequency = tr.FilteredFrequency;
-                cd.CenterFrequency = tr.CenterDisplayFrequency;
-                cd.MinFrequency = tr.MinDisplayFrequency;
-                cd.MaxFrequency = tr.MaxDisplayFrequency;
+                m_channelDisplays[tr.ChannelIndex].SetFrequencies(tr.InstantFrequency, tr.FilteredFrequency, tr.CenterDisplayFrequency, tr.MinDisplayFrequency, tr.MaxDisplayFrequency);
             }
         }
 
