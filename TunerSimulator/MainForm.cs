@@ -174,6 +174,7 @@ namespace TunerSimulator
                 tunerChannelControl1.GcfStep.Value = 8;
                 tunerChannelControl1.BaseOffsetStep.Value = 4;
                 tunerChannelControl1.BaseOffsetStepIncrement.Value = 2;
+                tunerChannelControl1.DetailedSearchEnabled = true;
                 tunerChannelControl1.SuspendChanges = false;
             }
 
@@ -186,6 +187,7 @@ namespace TunerSimulator
                 tunerChannelControl2.GcfStep.Value = tunerChannelControl1.GcfStep.Value;
                 tunerChannelControl2.BaseOffsetStep.Value = tunerChannelControl1.BaseOffsetStep.Value;
                 tunerChannelControl2.BaseOffsetStepIncrement.Value = tunerChannelControl1.BaseOffsetStepIncrement.Value;
+                tunerChannelControl2.DetailedSearchEnabled = tunerChannelControl1.DetailedSearchEnabled;
                 tunerChannelControl2.SuspendChanges = false;
 
                 tunerChannelControl3.SuspendChanges = true;
@@ -195,6 +197,7 @@ namespace TunerSimulator
                 tunerChannelControl3.GcfStep.Value = tunerChannelControl1.GcfStep.Value;
                 tunerChannelControl3.BaseOffsetStep.Value = tunerChannelControl1.BaseOffsetStep.Value;
                 tunerChannelControl3.BaseOffsetStepIncrement.Value = tunerChannelControl1.BaseOffsetStepIncrement.Value;
+                tunerChannelControl3.DetailedSearchEnabled = tunerChannelControl1.DetailedSearchEnabled;
                 tunerChannelControl3.SuspendChanges = false;
 
                 tunerChannelControl4.SuspendChanges = true;
@@ -204,6 +207,7 @@ namespace TunerSimulator
                 tunerChannelControl4.GcfStep.Value = tunerChannelControl1.GcfStep.Value;
                 tunerChannelControl4.BaseOffsetStep.Value = tunerChannelControl1.BaseOffsetStep.Value;
                 tunerChannelControl4.BaseOffsetStepIncrement.Value = tunerChannelControl1.BaseOffsetStepIncrement.Value;
+                tunerChannelControl4.DetailedSearchEnabled = tunerChannelControl1.DetailedSearchEnabled;
                 tunerChannelControl4.SuspendChanges = false;
             }
 
