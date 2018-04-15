@@ -94,6 +94,20 @@ namespace TunerSimulator
             }
         }
 
+        int m_midiNoteIndex;
+        public int MidiNoteIndex
+        {
+            get
+            {
+                return m_midiNoteIndex;
+            }
+            set
+            {
+                m_midiNoteIndex = value;
+                OnValueSet();
+            }
+        }
+
         public TunerChannelDisplay()
         {
             InitializeComponent();
@@ -101,13 +115,14 @@ namespace TunerSimulator
             OnValueSet();
         }
 
-        public void SetFrequencies(float instantFrequency, float filteredFrequency, float centerFrequency, float minFrequency, float maxFrequency)
+        public void SetDisplayValues(float instantFrequency, float filteredFrequency, float centerFrequency, float minFrequency, float maxFrequency, int midiNoteIndex)
         {
             m_instantFrequency = instantFrequency;
             m_filteredFrequency = filteredFrequency;
             m_centerFrequency = centerFrequency;
             m_minFrequency = minFrequency;
             m_maxFrequency = maxFrequency;
+            m_midiNoteIndex = midiNoteIndex;
             OnValueSet();
         }
 
@@ -187,10 +202,10 @@ namespace TunerSimulator
         private void OnValueSet()
         {
             DoPaint();
-            lblCenterFrequency.Text = m_centerFrequency.ToString("0000.0");
-            lblMinFrequency.Text = m_minFrequency.ToString("0000.0");
-            lblMaxFrequency.Text = m_maxFrequency.ToString("0000.0");
-            lblCurrentFrequency.Text = string.Format("Instant: {0:0000.0} Filtered: {1:0000.0}", m_instantFrequency, m_filteredFrequency);
+            lblCenterFrequency.Text = m_centerFrequency.ToString("####.#");
+            lblMinFrequency.Text = m_minFrequency.ToString("####.#");
+            lblMaxFrequency.Text = m_maxFrequency.ToString("####.#");
+            lblCurrentFrequency.Text = string.Format("Instant: {0:####.#} Filtered: {1:####.#} MIDI Note Index: {2:###}", m_instantFrequency, m_filteredFrequency, m_midiNoteIndex);
             //lblTemporaryDisplay.Text = "";
             //lblTemporaryDisplay.Text = string.Format("I: {0:0000.0} F: {1:0000.0} <: {2:0000.0} C: {3:0000.0} >: {4:0000.0}", m_instantFrequency, m_filteredFrequency, m_minFrequency, m_centerFrequency, m_maxFrequency);
         }

@@ -413,7 +413,8 @@ public:
         PrintFloat(m_filteredFrequency); Serial.print(COMMA_SEPARATOR);
         PrintFloat(centerDisplayFrequency); Serial.print(COMMA_SEPARATOR);
         PrintFloat(minDisplayFrequency); Serial.print(COMMA_SEPARATOR);
-        PrintFloat(maxDisplayFrequency); //Serial.print(COMMA_SEPARATOR);
+        PrintFloat(maxDisplayFrequency); Serial.print(COMMA_SEPARATOR);
+        Serial.print(m_tunerNote); //Serial.print(COMMA_SEPARATOR);
         Ln();
     }
 

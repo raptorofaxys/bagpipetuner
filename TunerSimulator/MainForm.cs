@@ -57,6 +57,7 @@ namespace TunerSimulator
             public float CenterDisplayFrequency;
             public float MinDisplayFrequency;
             public float MaxDisplayFrequency;
+            public int MidiNoteIndex;
         }
 
         Queue<TunerReading> m_tunerReadingQueue = new Queue<TunerReading>();
@@ -278,7 +279,7 @@ namespace TunerSimulator
 
             if ((tr.ChannelIndex >= 0) && (tr.ChannelIndex < m_channelDisplays.Length))
             {
-                m_channelDisplays[tr.ChannelIndex].SetFrequencies(tr.InstantFrequency, tr.FilteredFrequency, tr.CenterDisplayFrequency, tr.MinDisplayFrequency, tr.MaxDisplayFrequency);
+                m_channelDisplays[tr.ChannelIndex].SetDisplayValues(tr.InstantFrequency, tr.FilteredFrequency, tr.CenterDisplayFrequency, tr.MinDisplayFrequency, tr.MaxDisplayFrequency, tr.MidiNoteIndex);
             }
         }
 
@@ -626,7 +627,7 @@ namespace TunerSimulator
                     {
                         var reading = new TunerReading();
                         var values = line.Split(',');
-                        if (values.Length == 12)
+                        if (values.Length == 13)
                         {
                             int.TryParse(values[0], out reading.ChannelIndex);
                             float.TryParse(values[1], out reading.InstantFrequency);
@@ -640,6 +641,7 @@ namespace TunerSimulator
                             float.TryParse(values[9], out reading.CenterDisplayFrequency);
                             float.TryParse(values[10], out reading.MinDisplayFrequency);
                             float.TryParse(values[11], out reading.MaxDisplayFrequency);
+                            int.TryParse(values[12], out reading.MidiNoteIndex);
                             EnqueueTunerReading(reading);
                             BeginInvoke((Action)(() => OnTunerReading(reading)));
                             //Console.WriteLine("Tuner frequency: {0} (raw: {1})", reading.SignalFrequency, line);
