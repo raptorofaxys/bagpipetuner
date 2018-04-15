@@ -341,7 +341,7 @@ public:
 
         if (bestOffset == ~0)
         {
-            bestOffset = (minBestOffset + maxBestOffset) / 2;
+            bestOffset = (static_cast<DoubleFixed>(minBestOffset) + maxBestOffset) / 2;
         }
 
         float result = GetFrequencyForOffsetFixed(bestOffset);
