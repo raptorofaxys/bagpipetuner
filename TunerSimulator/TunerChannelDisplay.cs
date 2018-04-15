@@ -126,6 +126,11 @@ namespace TunerSimulator
             OnValueSet();
         }
 
+        public void Reset()
+        {
+            SetDisplayValues(-1.0f, -1.0f, -1.0f, -1.0f, -1.0f, -1);
+        }
+
         private void RenderTick(Graphics gfx, float frequency, Color color)
         {
             //var midRange = Math.Log(m_centerFrequency) / Math.Log(m_minFrequency);

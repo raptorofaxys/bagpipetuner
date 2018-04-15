@@ -10,6 +10,8 @@ public:
             m_channels[i].SetPin(i);
         }
 
+        m_oneChannelMode = false;
+
         DEBUG_PRINT_STATEMENTS(Serial.write("Constructing tuner..."); Ln(););
     }
 
@@ -208,7 +210,7 @@ public:
                         DEFAULT_PRINT->print("#WARNING: BAD SYNC"); Ln();
                     }
 
-                    // This command is done. Indicate that we're ready for another one.
+                    // This command is done reading from the serial buffer. Indicate that we're ready for another one.
                     DEFAULT_PRINT->print("c"); Ln();
 
                     DEFAULT_PRINT->print("#read command: "); DEFAULT_PRINT->print(command); DEFAULT_PRINT->print("("); DEFAULT_PRINT->print(static_cast<int>(command)); DEFAULT_PRINT->print(")"); Ln();
@@ -216,8 +218,7 @@ public:
                     switch (command)
                     {
                     case 'l': locked = (value != 0); break;
-                    case 'I': g_dumpOnNullReading = true; break;
-                    case 'i': g_dumpOnNullReading = false; break;
+                    case 'i': g_dumpOnNullReading = (value != 0); break;
                     case 'f': g_dumpBelowFrequency = value; break;
                     case 'c': activeChannelIndex = value; break;
                     case 'm': m_channels[activeChannelIndex].m_minFrequency = max(value, ABSOLUTE_MIN_FREQUENCY); break;
@@ -228,6 +229,7 @@ public:
                     case 's': m_channels[activeChannelIndex].m_baseOffsetStepIncrement = value; break;
                     case 'x': m_channels[activeChannelIndex].m_enableDetailedSearch = (value != 0); break;
                     case 'd': g_dumpMode = static_cast<DumpMode::Type>(value); break;
+                    case 'X': m_oneChannelMode = (value != 0); break;
                     case 'e':
                     {
                         DEFAULT_PRINT->print("e");
@@ -272,10 +274,17 @@ public:
                 TunePitch();
             }
 
-            for (unsigned int i = 0; i < ARRAY_COUNT(m_channels); ++i)
+            if (!m_oneChannelMode)
             {
-                m_channels[i].m_a440 = m_a440;
-                m_channels[i].Update();
+                for (unsigned int i = 0; i < ARRAY_COUNT(m_channels); ++i)
+                {
+                    m_channels[i].m_a440 = m_a440;
+                    m_channels[i].Update();
+                }
+            }
+            else
+            {
+                m_channels[0].Update();
             }
         }
 
@@ -285,5 +294,6 @@ public:
 private:
     FourByteUnion m_a440;
 
+    bool m_oneChannelMode;
     TunerChannel m_channels[NUM_CHANNELS];
 };

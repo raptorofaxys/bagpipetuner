@@ -125,7 +125,8 @@ namespace TunerSimulator
 
         void InitializeTuner()
         {
-            txtCorrelationDipPct.Text = 25.ToString();
+            chkSingleChannelMode.Checked = false;
+
             const float frequencyDeviation = 0.1f;
 
             const int bassDroneFreq = 119;
@@ -279,7 +280,15 @@ namespace TunerSimulator
 
             if ((tr.ChannelIndex >= 0) && (tr.ChannelIndex < m_channelDisplays.Length))
             {
-                m_channelDisplays[tr.ChannelIndex].SetDisplayValues(tr.InstantFrequency, tr.FilteredFrequency, tr.CenterDisplayFrequency, tr.MinDisplayFrequency, tr.MaxDisplayFrequency, tr.MidiNoteIndex);
+                var cd = m_channelDisplays[tr.ChannelIndex];
+                if (!chkSingleChannelMode.Checked || (tr.ChannelIndex == 0))
+                {
+                    cd.SetDisplayValues(tr.InstantFrequency, tr.FilteredFrequency, tr.CenterDisplayFrequency, tr.MinDisplayFrequency, tr.MaxDisplayFrequency, tr.MidiNoteIndex);
+                }
+                else
+                {
+                    cd.Reset();
+                }
             }
         }
 
@@ -765,7 +774,7 @@ namespace TunerSimulator
 
         private void chkDumpOnNull_CheckedChanged(object sender, EventArgs e)
         {
-            SendSerialLine(chkDumpOnNull.Checked ? "I" : "i");
+            SendSerialLine(string.Format("i{0}", chkDumpOnNull.Checked ? "1" : "0"));
         }
 
         private void txtMinDumpFrequency_TextChanged(object sender, EventArgs e)
@@ -780,15 +789,6 @@ namespace TunerSimulator
         private void chkDumpOnOctaveError_CheckedChanged(object sender, EventArgs e)
         {
             UpdateAutoDumpFrequency();
-        }
-
-        private void txtCorrelationDipPct_TextChanged(object sender, EventArgs e)
-        {
-            //int percent;
-            //if (int.TryParse(txtCorrelationDipPct.Text, out percent))
-            //{
-            //    SerialSend(string.Format("d{0}", percent));
-            //}
         }
 
         private void cmbDumpMode_SelectedIndexChanged(object sender, EventArgs e)
@@ -834,6 +834,11 @@ namespace TunerSimulator
 
             m_bagpipeOutputs[3].Sample = m_chanterNotes[noteIndex];
             m_bagpipeOutputs[3].DesiredFrequency = m_chanterNotes[noteIndex].Frequency;
+        }
+
+        private void chkSingleChannelMode_CheckedChanged(object sender, EventArgs e)
+        {
+            SendSerialLine(string.Format("X{0}", chkSingleChannelMode.Checked ? "1" : "0"));
         }
     }
 }
