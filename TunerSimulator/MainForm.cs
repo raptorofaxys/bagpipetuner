@@ -249,7 +249,7 @@ namespace TunerSimulator
                 tr.MinSignalFrequency,
                 tr.MaxSignalFrequency);
             sb.AppendFormat("(expecting: {0}) [{1}, {2}]",
-                m_soundOutput.Sample != null ? m_soundOutput.Sample.Frequency.ToString() : "-",
+                m_soundOutput.Sample != null ? m_soundOutput.DesiredFrequency.ToString() : "-",
                 tr.MinSignalAmplitude,
                 tr.MaxSignalAmplitude);
             sb.Append(SPINNER[m_spinnerIndex]);
