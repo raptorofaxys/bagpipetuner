@@ -48,15 +48,16 @@
             this.lblBosi = new System.Windows.Forms.Label();
             this.btnQuickTest = new System.Windows.Forms.Button();
             this.lblMisc = new System.Windows.Forms.Label();
+            this.chkSingleChannelMode = new System.Windows.Forms.CheckBox();
+            this.tunerChannelDisplay4 = new TunerSimulator.TunerChannelDisplay();
+            this.tunerChannelDisplay3 = new TunerSimulator.TunerChannelDisplay();
+            this.tunerChannelDisplay2 = new TunerSimulator.TunerChannelDisplay();
+            this.tunerChannelDisplay1 = new TunerSimulator.TunerChannelDisplay();
             this.tunerChannelControl4 = new TunerSimulator.TunerChannelControl();
             this.tunerChannelControl3 = new TunerSimulator.TunerChannelControl();
             this.tunerChannelControl2 = new TunerSimulator.TunerChannelControl();
             this.tunerChannelControl1 = new TunerSimulator.TunerChannelControl();
-            this.tunerChannelDisplay1 = new TunerSimulator.TunerChannelDisplay();
-            this.tunerChannelDisplay2 = new TunerSimulator.TunerChannelDisplay();
-            this.tunerChannelDisplay3 = new TunerSimulator.TunerChannelDisplay();
-            this.tunerChannelDisplay4 = new TunerSimulator.TunerChannelDisplay();
-            this.chkSingleChannelMode = new System.Windows.Forms.CheckBox();
+            this.chkFullRangeOnAllChannels = new System.Windows.Forms.CheckBox();
             this.gbDumping.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -248,6 +249,69 @@
             this.lblMisc.TabIndex = 24;
             this.lblMisc.Text = "XXXX ms";
             // 
+            // chkSingleChannelMode
+            // 
+            this.chkSingleChannelMode.AutoSize = true;
+            this.chkSingleChannelMode.Location = new System.Drawing.Point(514, 62);
+            this.chkSingleChannelMode.Name = "chkSingleChannelMode";
+            this.chkSingleChannelMode.Size = new System.Drawing.Size(126, 17);
+            this.chkSingleChannelMode.TabIndex = 29;
+            this.chkSingleChannelMode.Text = "Single-channel Mode";
+            this.chkSingleChannelMode.UseVisualStyleBackColor = true;
+            this.chkSingleChannelMode.CheckedChanged += new System.EventHandler(this.chkSingleChannelMode_CheckedChanged);
+            // 
+            // tunerChannelDisplay4
+            // 
+            this.tunerChannelDisplay4.CenterFrequency = 0F;
+            this.tunerChannelDisplay4.FilteredFrequency = 0F;
+            this.tunerChannelDisplay4.InstantFrequency = 0F;
+            this.tunerChannelDisplay4.Location = new System.Drawing.Point(514, 410);
+            this.tunerChannelDisplay4.MaxFrequency = 0F;
+            this.tunerChannelDisplay4.MidiNoteIndex = 0;
+            this.tunerChannelDisplay4.MinFrequency = 0F;
+            this.tunerChannelDisplay4.Name = "tunerChannelDisplay4";
+            this.tunerChannelDisplay4.Size = new System.Drawing.Size(339, 56);
+            this.tunerChannelDisplay4.TabIndex = 28;
+            // 
+            // tunerChannelDisplay3
+            // 
+            this.tunerChannelDisplay3.CenterFrequency = 0F;
+            this.tunerChannelDisplay3.FilteredFrequency = 0F;
+            this.tunerChannelDisplay3.InstantFrequency = 0F;
+            this.tunerChannelDisplay3.Location = new System.Drawing.Point(514, 348);
+            this.tunerChannelDisplay3.MaxFrequency = 0F;
+            this.tunerChannelDisplay3.MidiNoteIndex = 0;
+            this.tunerChannelDisplay3.MinFrequency = 0F;
+            this.tunerChannelDisplay3.Name = "tunerChannelDisplay3";
+            this.tunerChannelDisplay3.Size = new System.Drawing.Size(339, 56);
+            this.tunerChannelDisplay3.TabIndex = 27;
+            // 
+            // tunerChannelDisplay2
+            // 
+            this.tunerChannelDisplay2.CenterFrequency = 0F;
+            this.tunerChannelDisplay2.FilteredFrequency = 0F;
+            this.tunerChannelDisplay2.InstantFrequency = 0F;
+            this.tunerChannelDisplay2.Location = new System.Drawing.Point(514, 286);
+            this.tunerChannelDisplay2.MaxFrequency = 0F;
+            this.tunerChannelDisplay2.MidiNoteIndex = 0;
+            this.tunerChannelDisplay2.MinFrequency = 0F;
+            this.tunerChannelDisplay2.Name = "tunerChannelDisplay2";
+            this.tunerChannelDisplay2.Size = new System.Drawing.Size(339, 56);
+            this.tunerChannelDisplay2.TabIndex = 26;
+            // 
+            // tunerChannelDisplay1
+            // 
+            this.tunerChannelDisplay1.CenterFrequency = 0F;
+            this.tunerChannelDisplay1.FilteredFrequency = 0F;
+            this.tunerChannelDisplay1.InstantFrequency = 0F;
+            this.tunerChannelDisplay1.Location = new System.Drawing.Point(514, 224);
+            this.tunerChannelDisplay1.MaxFrequency = 0F;
+            this.tunerChannelDisplay1.MidiNoteIndex = 0;
+            this.tunerChannelDisplay1.MinFrequency = 0F;
+            this.tunerChannelDisplay1.Name = "tunerChannelDisplay1";
+            this.tunerChannelDisplay1.Size = new System.Drawing.Size(339, 56);
+            this.tunerChannelDisplay1.TabIndex = 25;
+            // 
             // tunerChannelControl4
             // 
             this.tunerChannelControl4.ChannelIndex = 3;
@@ -296,74 +360,23 @@
             this.tunerChannelControl1.TabIndex = 12;
             this.tunerChannelControl1.ConfigurationChanged += new System.EventHandler(this.tunerChannelControl_ConfigurationChanged);
             // 
-            // tunerChannelDisplay1
+            // chkFullSpectrumOnAllChannel
             // 
-            this.tunerChannelDisplay1.CenterFrequency = 0F;
-            this.tunerChannelDisplay1.FilteredFrequency = 0F;
-            this.tunerChannelDisplay1.InstantFrequency = 0F;
-            this.tunerChannelDisplay1.Location = new System.Drawing.Point(514, 224);
-            this.tunerChannelDisplay1.MaxFrequency = 0F;
-            this.tunerChannelDisplay1.MidiNoteIndex = 0;
-            this.tunerChannelDisplay1.MinFrequency = 0F;
-            this.tunerChannelDisplay1.Name = "tunerChannelDisplay1";
-            this.tunerChannelDisplay1.Size = new System.Drawing.Size(339, 56);
-            this.tunerChannelDisplay1.TabIndex = 25;
-            // 
-            // tunerChannelDisplay2
-            // 
-            this.tunerChannelDisplay2.CenterFrequency = 0F;
-            this.tunerChannelDisplay2.FilteredFrequency = 0F;
-            this.tunerChannelDisplay2.InstantFrequency = 0F;
-            this.tunerChannelDisplay2.Location = new System.Drawing.Point(514, 286);
-            this.tunerChannelDisplay2.MaxFrequency = 0F;
-            this.tunerChannelDisplay2.MidiNoteIndex = 0;
-            this.tunerChannelDisplay2.MinFrequency = 0F;
-            this.tunerChannelDisplay2.Name = "tunerChannelDisplay2";
-            this.tunerChannelDisplay2.Size = new System.Drawing.Size(339, 56);
-            this.tunerChannelDisplay2.TabIndex = 26;
-            // 
-            // tunerChannelDisplay3
-            // 
-            this.tunerChannelDisplay3.CenterFrequency = 0F;
-            this.tunerChannelDisplay3.FilteredFrequency = 0F;
-            this.tunerChannelDisplay3.InstantFrequency = 0F;
-            this.tunerChannelDisplay3.Location = new System.Drawing.Point(514, 348);
-            this.tunerChannelDisplay3.MaxFrequency = 0F;
-            this.tunerChannelDisplay3.MidiNoteIndex = 0;
-            this.tunerChannelDisplay3.MinFrequency = 0F;
-            this.tunerChannelDisplay3.Name = "tunerChannelDisplay3";
-            this.tunerChannelDisplay3.Size = new System.Drawing.Size(339, 56);
-            this.tunerChannelDisplay3.TabIndex = 27;
-            // 
-            // tunerChannelDisplay4
-            // 
-            this.tunerChannelDisplay4.CenterFrequency = 0F;
-            this.tunerChannelDisplay4.FilteredFrequency = 0F;
-            this.tunerChannelDisplay4.InstantFrequency = 0F;
-            this.tunerChannelDisplay4.Location = new System.Drawing.Point(514, 410);
-            this.tunerChannelDisplay4.MaxFrequency = 0F;
-            this.tunerChannelDisplay4.MidiNoteIndex = 0;
-            this.tunerChannelDisplay4.MinFrequency = 0F;
-            this.tunerChannelDisplay4.Name = "tunerChannelDisplay4";
-            this.tunerChannelDisplay4.Size = new System.Drawing.Size(339, 56);
-            this.tunerChannelDisplay4.TabIndex = 28;
-            // 
-            // chkSingleChannelMode
-            // 
-            this.chkSingleChannelMode.AutoSize = true;
-            this.chkSingleChannelMode.Location = new System.Drawing.Point(514, 62);
-            this.chkSingleChannelMode.Name = "chkSingleChannelMode";
-            this.chkSingleChannelMode.Size = new System.Drawing.Size(127, 17);
-            this.chkSingleChannelMode.TabIndex = 29;
-            this.chkSingleChannelMode.Text = "Single-Channel Mode";
-            this.chkSingleChannelMode.UseVisualStyleBackColor = true;
-            this.chkSingleChannelMode.CheckedChanged += new System.EventHandler(this.chkSingleChannelMode_CheckedChanged);
+            this.chkFullRangeOnAllChannels.AutoSize = true;
+            this.chkFullRangeOnAllChannels.Location = new System.Drawing.Point(514, 85);
+            this.chkFullRangeOnAllChannels.Name = "chkFullSpectrumOnAllChannel";
+            this.chkFullRangeOnAllChannels.Size = new System.Drawing.Size(162, 17);
+            this.chkFullRangeOnAllChannels.TabIndex = 30;
+            this.chkFullRangeOnAllChannels.Text = "Full frequency range on all channels";
+            this.chkFullRangeOnAllChannels.UseVisualStyleBackColor = true;
+            this.chkFullRangeOnAllChannels.CheckedChanged += new System.EventHandler(this.chkFullRangeOnAllChannels_CheckedChanged);
             // 
             // MainForm
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(870, 635);
+            this.Controls.Add(this.chkFullRangeOnAllChannels);
             this.Controls.Add(this.chkSingleChannelMode);
             this.Controls.Add(this.tunerChannelDisplay4);
             this.Controls.Add(this.tunerChannelDisplay3);
@@ -429,5 +442,6 @@
         private TunerChannelDisplay tunerChannelDisplay3;
         private TunerChannelDisplay tunerChannelDisplay4;
         private System.Windows.Forms.CheckBox chkSingleChannelMode;
+        private System.Windows.Forms.CheckBox chkFullRangeOnAllChannels;
     }
 }

@@ -173,9 +173,9 @@ namespace TunerSimulator
             tunerChannelControl4.DetailedSearchEnabled = true;
             tunerChannelControl4.SuspendChanges = false;
 
-            const bool fullRangeChannel0 = true;
-            const bool fullRangeAllChannels = true;
-            if (fullRangeChannel0 || fullRangeAllChannels)
+            const bool fullRangeChannel0 = false;
+            var fullRangeOnAllChannels = chkFullRangeOnAllChannels.Checked;
+            if (fullRangeChannel0 || fullRangeOnAllChannels)
             {
                 tunerChannelControl1.SuspendChanges = true;
                 tunerChannelControl1.MinFrequency.Value = 75;
@@ -188,7 +188,7 @@ namespace TunerSimulator
                 tunerChannelControl1.SuspendChanges = false;
             }
 
-            if (fullRangeAllChannels)
+            if (fullRangeOnAllChannels)
             {
                 tunerChannelControl2.SuspendChanges = true;
                 tunerChannelControl2.MinFrequency.Value = tunerChannelControl1.MinFrequency.Value;
@@ -839,6 +839,11 @@ namespace TunerSimulator
         private void chkSingleChannelMode_CheckedChanged(object sender, EventArgs e)
         {
             SendSerialLine(string.Format("X{0}", chkSingleChannelMode.Checked ? "1" : "0"));
+        }
+
+        private void chkFullRangeOnAllChannels_CheckedChanged(object sender, EventArgs e)
+        {
+            InitializeTuner();
         }
     }
 }
