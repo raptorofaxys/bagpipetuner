@@ -11,10 +11,20 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Tuner\tuner_utils.h" />
     <ClInclude Include="__vm\.Tuner.vsarduino.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Tuner\Tuner.ino" />
+    <None Include="Tuner\tuner_10_print.ino" />
+    <None Include="Tuner\tuner_15_led.ino" />
+    <None Include="Tuner\tuner_18_pushbutton.ino" />
+    <None Include="Tuner\tuner_20_profiler.ino" />
+    <None Include="Tuner\Tuner_50_globals.ino" />
+    <None Include="Tuner\tuner_55_tuning.ino" />
+    <None Include="Tuner\tuner_60_tunerchannel.ino" />
+    <None Include="Tuner\tuner_70_tuner.ino" />
+    <None Include="Tuner\tuner_99_main.ino" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <ProjectGuid>{5062B0DB-87D8-4357-A151-8BDD8FB71D56}</ProjectGuid>
