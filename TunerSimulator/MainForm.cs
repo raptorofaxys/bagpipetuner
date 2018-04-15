@@ -148,7 +148,7 @@ namespace TunerSimulator
             tunerChannelControl2.GcfStep.Value = 2;
             tunerChannelControl2.BaseOffsetStep.Value = 4;
             tunerChannelControl2.BaseOffsetStepIncrement.Value = 2;
-            tunerChannelControl1.DetailedSearchEnabled = true;
+            tunerChannelControl2.DetailedSearchEnabled = true;
             tunerChannelControl2.SuspendChanges = false;
 
             tunerChannelControl3.SuspendChanges = true;
@@ -158,7 +158,7 @@ namespace TunerSimulator
             tunerChannelControl3.GcfStep.Value = 2;
             tunerChannelControl3.BaseOffsetStep.Value = 4;
             tunerChannelControl3.BaseOffsetStepIncrement.Value = 2;
-            tunerChannelControl1.DetailedSearchEnabled = true;
+            tunerChannelControl3.DetailedSearchEnabled = true;
             tunerChannelControl3.SuspendChanges = false;
 
             const int chanterMinFreq = 420;
@@ -170,7 +170,7 @@ namespace TunerSimulator
             tunerChannelControl4.GcfStep.Value = 2;
             tunerChannelControl4.BaseOffsetStep.Value = 4;
             tunerChannelControl4.BaseOffsetStepIncrement.Value = 2;
-            tunerChannelControl1.DetailedSearchEnabled = true;
+            tunerChannelControl4.DetailedSearchEnabled = true;
             tunerChannelControl4.SuspendChanges = false;
 
             const bool fullRangeChannel0 = true;
