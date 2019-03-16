@@ -239,3 +239,4 @@ Audio Materials/Bagpipe Sounds and video/Bagpipe Sounds_data/*
 *.VC.db
 *.VC.opendb
 ignore/*
+.vs/
