@@ -775,6 +775,11 @@ namespace TunerSimulator
             txtMinDumpFrequency.Text = "-1";
         }
 
+        private void chkDumpBufferOnLowAmplitude_CheckedChanged(object sender, EventArgs e)
+        {
+            SendSerialLine(string.Format("a{0}", chkDumpBufferOnLowAmplitude.Checked ? "1" : "0"));
+        }
+
         private void chkDumpOnNull_CheckedChanged(object sender, EventArgs e)
         {
             SendSerialLine(string.Format("i{0}", chkDumpOnNull.Checked ? "1" : "0"));

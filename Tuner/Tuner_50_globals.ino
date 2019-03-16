@@ -54,6 +54,7 @@ char g_recordingBuffer[MAX_BUFFER_SIZE];
 /////////////////////////////
 // GCF debugging helpers
 /////////////////////////////
+bool g_dumpOnLowAmplitude = false;
 bool g_dumpOnNullReading = false;
 float g_dumpBelowFrequency = -1.0f;
 

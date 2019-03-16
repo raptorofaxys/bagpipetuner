@@ -213,11 +213,12 @@ public:
                     // This command is done reading from the serial buffer. Indicate that we're ready for another one.
                     DEFAULT_PRINT->print("c"); Ln();
 
-                    DEFAULT_PRINT->print("#read command: "); DEFAULT_PRINT->print(command); DEFAULT_PRINT->print("("); DEFAULT_PRINT->print(static_cast<int>(command)); DEFAULT_PRINT->print(")"); Ln();
-                    DEFAULT_PRINT->print("#value: "); DEFAULT_PRINT->print(value); Ln(); //where is all the echo output?
+                    //DEFAULT_PRINT->print("#read command: "); DEFAULT_PRINT->print(command); DEFAULT_PRINT->print("("); DEFAULT_PRINT->print(static_cast<int>(command)); DEFAULT_PRINT->print(")"); Ln();
+                    //DEFAULT_PRINT->print("#value: "); DEFAULT_PRINT->print(value); Ln(); //where is all the echo output?
                     switch (command)
                     {
                     case 'l': locked = (value != 0); break;
+                    case 'a': g_dumpOnLowAmplitude = (value != 0); break;
                     case 'i': g_dumpOnNullReading = (value != 0); break;
                     case 'f': g_dumpBelowFrequency = value; break;
                     case 'c': activeChannelIndex = value; break;
@@ -243,15 +244,18 @@ public:
                         break;
                     }
 
-                    DEFAULT_PRINT->print("#state ");
-                    DEFAULT_PRINT->print(activeChannelIndex); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-                    DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_minFrequency); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-                    DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_maxFrequency); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-                    DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_correlationDipThresholdPercent); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-                    DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_gcfStep); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-                    DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_baseOffsetStep); DEFAULT_PRINT->print(COMMA_SEPARATOR);
-                    DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_baseOffsetStepIncrement);
-                    Ln();
+                    //DEFAULT_PRINT->print("#state ");
+                    //DEFAULT_PRINT->print(g_dumpOnNullReading); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+                    //DEFAULT_PRINT->print(g_dumpBelowFrequency); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+                    //DEFAULT_PRINT->print(g_dumpMode); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+                    //DEFAULT_PRINT->print(activeChannelIndex); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+                    //DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_minFrequency); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+                    //DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_maxFrequency); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+                    //DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_correlationDipThresholdPercent); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+                    //DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_gcfStep); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+                    //DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_baseOffsetStep); DEFAULT_PRINT->print(COMMA_SEPARATOR);
+                    //DEFAULT_PRINT->print(m_channels[activeChannelIndex].m_baseOffsetStepIncrement);
+                    //Ln();
 
                     // Give a little time to react in case the host wants to send multiple commands in a row
                     //delay(25);

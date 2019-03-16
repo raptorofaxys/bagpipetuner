@@ -116,22 +116,32 @@ public:
         DEBUG_PRINT_STATEMENTS(
         {
             PrintStringInt("cdp", m_correlationDipThresholdPercent); Ln();
-        PrintStringInt("gcfs", m_gcfStep); Ln();
-        PrintStringInt("bos", m_baseOffsetStep); Ln();
-        PrintStringInt("bosi", m_baseOffsetStepIncrement); Ln();
-        PrintStringInt("minf", m_minFrequency); Ln();
-        PrintStringInt("maxf", m_maxFrequency); Ln();
-        PrintStringInt("bufferSize", bufferSize); Ln();
-        PrintStringInt("signalMin", signalMin); Ln();
-        PrintStringInt("signalMax", signalMax); Ln();
-        PrintStringInt("maxAmplitude", maxAmplitude); Ln();
+            PrintStringInt("gcfs", m_gcfStep); Ln();
+            PrintStringInt("bos", m_baseOffsetStep); Ln();
+            PrintStringInt("bosi", m_baseOffsetStepIncrement); Ln();
+            PrintStringInt("minf", m_minFrequency); Ln();
+            PrintStringInt("maxf", m_maxFrequency); Ln();
+            PrintStringInt("bufferSize", bufferSize); Ln();
+            PrintStringInt("signalMin", signalMin); Ln();
+            PrintStringInt("signalMax", signalMax); Ln();
+            PrintStringInt("maxAmplitude", maxAmplitude); Ln();
         });
 
         // If we haven't reached the amplitude threshold, don't try to determine pitch.
         if (maxAmplitude < AMPLITUDE_THRESHOLD)
         {
+            if (g_dumpOnLowAmplitude)
+            {
+                for (int i = 0; i < bufferSize; ++i)
+                {
+                    DEFAULT_PRINT->print("#");
+                    DEFAULT_PRINT->print(static_cast<int>(g_recordingBuffer[i]));
+                    Ln();
+                }
+            }
+
             //DEFAULT_PRINT->print("DetermineSignalPitch() no amplitude"); Ln();
-            return -1.0f;
+            return -2.0f;
         }
 
         bool doPrint = false;
@@ -241,7 +251,7 @@ public:
 
             if (minBestOffset == ~0)
             {
-                return -1.0f;
+                return -3.0f;
             }
 
             maxCorrelationDipPercent = (bestCorrelation * 100) / maxCorrelation;

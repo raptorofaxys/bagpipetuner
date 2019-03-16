@@ -49,6 +49,7 @@
             this.btnQuickTest = new System.Windows.Forms.Button();
             this.lblMisc = new System.Windows.Forms.Label();
             this.chkSingleChannelMode = new System.Windows.Forms.CheckBox();
+            this.chkFullRangeOnAllChannels = new System.Windows.Forms.CheckBox();
             this.tunerChannelDisplay4 = new TunerSimulator.TunerChannelDisplay();
             this.tunerChannelDisplay3 = new TunerSimulator.TunerChannelDisplay();
             this.tunerChannelDisplay2 = new TunerSimulator.TunerChannelDisplay();
@@ -57,7 +58,7 @@
             this.tunerChannelControl3 = new TunerSimulator.TunerChannelControl();
             this.tunerChannelControl2 = new TunerSimulator.TunerChannelControl();
             this.tunerChannelControl1 = new TunerSimulator.TunerChannelControl();
-            this.chkFullRangeOnAllChannels = new System.Windows.Forms.CheckBox();
+            this.chkDumpBufferOnLowAmplitude = new System.Windows.Forms.CheckBox();
             this.gbDumping.SuspendLayout();
             this.SuspendLayout();
             // 
@@ -87,7 +88,8 @@
             // 
             // btnFullTest
             // 
-            this.btnFullTest.Location = new System.Drawing.Point(514, 593);
+            this.btnFullTest.Enabled = false;
+            this.btnFullTest.Location = new System.Drawing.Point(707, 33);
             this.btnFullTest.Name = "btnFullTest";
             this.btnFullTest.Size = new System.Drawing.Size(75, 23);
             this.btnFullTest.TabIndex = 2;
@@ -107,6 +109,7 @@
             // 
             // gbDumping
             // 
+            this.gbDumping.Controls.Add(this.chkDumpBufferOnLowAmplitude);
             this.gbDumping.Controls.Add(this.cmbDumpMode);
             this.gbDumping.Controls.Add(this.chkDumpOnOctaveError);
             this.gbDumping.Controls.Add(this.lblMinDumpFrequency);
@@ -116,7 +119,7 @@
             this.gbDumping.Margin = new System.Windows.Forms.Padding(1);
             this.gbDumping.Name = "gbDumping";
             this.gbDumping.Padding = new System.Windows.Forms.Padding(1);
-            this.gbDumping.Size = new System.Drawing.Size(208, 119);
+            this.gbDumping.Size = new System.Drawing.Size(256, 141);
             this.gbDumping.TabIndex = 10;
             this.gbDumping.TabStop = false;
             this.gbDumping.Text = "Dumping";
@@ -128,25 +131,27 @@
             this.cmbDumpMode.Items.AddRange(new object[] {
             "Dump Buffer",
             "Dump GCF"});
-            this.cmbDumpMode.Location = new System.Drawing.Point(4, 89);
+            this.cmbDumpMode.Location = new System.Drawing.Point(4, 112);
             this.cmbDumpMode.Name = "cmbDumpMode";
             this.cmbDumpMode.Size = new System.Drawing.Size(121, 21);
             this.cmbDumpMode.TabIndex = 14;
+            this.cmbDumpMode.SelectedIndexChanged += new System.EventHandler(this.cmbDumpMode_SelectedIndexChanged);
             // 
             // chkDumpOnOctaveError
             // 
             this.chkDumpOnOctaveError.AutoSize = true;
-            this.chkDumpOnOctaveError.Location = new System.Drawing.Point(6, 66);
+            this.chkDumpOnOctaveError.Location = new System.Drawing.Point(6, 89);
             this.chkDumpOnOctaveError.Name = "chkDumpOnOctaveError";
             this.chkDumpOnOctaveError.Size = new System.Drawing.Size(152, 17);
             this.chkDumpOnOctaveError.TabIndex = 13;
             this.chkDumpOnOctaveError.Text = "Auto-dump on octave error";
             this.chkDumpOnOctaveError.UseVisualStyleBackColor = true;
+            this.chkDumpOnOctaveError.CheckedChanged += new System.EventHandler(this.chkDumpOnOctaveError_CheckedChanged);
             // 
             // lblMinDumpFrequency
             // 
             this.lblMinDumpFrequency.AutoSize = true;
-            this.lblMinDumpFrequency.Location = new System.Drawing.Point(3, 43);
+            this.lblMinDumpFrequency.Location = new System.Drawing.Point(3, 66);
             this.lblMinDumpFrequency.Name = "lblMinDumpFrequency";
             this.lblMinDumpFrequency.Size = new System.Drawing.Size(69, 13);
             this.lblMinDumpFrequency.TabIndex = 12;
@@ -154,20 +159,22 @@
             // 
             // txtMinDumpFrequency
             // 
-            this.txtMinDumpFrequency.Location = new System.Drawing.Point(78, 40);
+            this.txtMinDumpFrequency.Location = new System.Drawing.Point(78, 63);
             this.txtMinDumpFrequency.Name = "txtMinDumpFrequency";
             this.txtMinDumpFrequency.Size = new System.Drawing.Size(100, 20);
             this.txtMinDumpFrequency.TabIndex = 11;
+            this.txtMinDumpFrequency.TextChanged += new System.EventHandler(this.txtMinDumpFrequency_TextChanged);
             // 
             // chkDumpOnNull
             // 
             this.chkDumpOnNull.AutoSize = true;
-            this.chkDumpOnNull.Location = new System.Drawing.Point(4, 17);
+            this.chkDumpOnNull.Location = new System.Drawing.Point(4, 40);
             this.chkDumpOnNull.Name = "chkDumpOnNull";
-            this.chkDumpOnNull.Size = new System.Drawing.Size(126, 17);
+            this.chkDumpOnNull.Size = new System.Drawing.Size(247, 17);
             this.chkDumpOnNull.TabIndex = 10;
-            this.chkDumpOnNull.Text = "Dump on null reading";
+            this.chkDumpOnNull.Text = "Dump on null reading (with sufficient amplitude)";
             this.chkDumpOnNull.UseVisualStyleBackColor = true;
+            this.chkDumpOnNull.CheckedChanged += new System.EventHandler(this.chkDumpOnNull_CheckedChanged);
             // 
             // lblMinF
             // 
@@ -231,7 +238,8 @@
             // 
             // btnQuickTest
             // 
-            this.btnQuickTest.Location = new System.Drawing.Point(595, 593);
+            this.btnQuickTest.Enabled = false;
+            this.btnQuickTest.Location = new System.Drawing.Point(788, 33);
             this.btnQuickTest.Name = "btnQuickTest";
             this.btnQuickTest.Size = new System.Drawing.Size(75, 23);
             this.btnQuickTest.TabIndex = 22;
@@ -259,6 +267,17 @@
             this.chkSingleChannelMode.Text = "Single-channel Mode";
             this.chkSingleChannelMode.UseVisualStyleBackColor = true;
             this.chkSingleChannelMode.CheckedChanged += new System.EventHandler(this.chkSingleChannelMode_CheckedChanged);
+            // 
+            // chkFullRangeOnAllChannels
+            // 
+            this.chkFullRangeOnAllChannels.AutoSize = true;
+            this.chkFullRangeOnAllChannels.Location = new System.Drawing.Point(514, 85);
+            this.chkFullRangeOnAllChannels.Name = "chkFullRangeOnAllChannels";
+            this.chkFullRangeOnAllChannels.Size = new System.Drawing.Size(196, 17);
+            this.chkFullRangeOnAllChannels.TabIndex = 30;
+            this.chkFullRangeOnAllChannels.Text = "Full frequency range on all channels";
+            this.chkFullRangeOnAllChannels.UseVisualStyleBackColor = true;
+            this.chkFullRangeOnAllChannels.CheckedChanged += new System.EventHandler(this.chkFullRangeOnAllChannels_CheckedChanged);
             // 
             // tunerChannelDisplay4
             // 
@@ -360,16 +379,16 @@
             this.tunerChannelControl1.TabIndex = 12;
             this.tunerChannelControl1.ConfigurationChanged += new System.EventHandler(this.tunerChannelControl_ConfigurationChanged);
             // 
-            // chkFullSpectrumOnAllChannel
+            // chkDumpBufferOnLowAmplitude
             // 
-            this.chkFullRangeOnAllChannels.AutoSize = true;
-            this.chkFullRangeOnAllChannels.Location = new System.Drawing.Point(514, 85);
-            this.chkFullRangeOnAllChannels.Name = "chkFullSpectrumOnAllChannel";
-            this.chkFullRangeOnAllChannels.Size = new System.Drawing.Size(162, 17);
-            this.chkFullRangeOnAllChannels.TabIndex = 30;
-            this.chkFullRangeOnAllChannels.Text = "Full frequency range on all channels";
-            this.chkFullRangeOnAllChannels.UseVisualStyleBackColor = true;
-            this.chkFullRangeOnAllChannels.CheckedChanged += new System.EventHandler(this.chkFullRangeOnAllChannels_CheckedChanged);
+            this.chkDumpBufferOnLowAmplitude.AutoSize = true;
+            this.chkDumpBufferOnLowAmplitude.Location = new System.Drawing.Point(4, 17);
+            this.chkDumpBufferOnLowAmplitude.Name = "chkDumpBufferOnLowAmplitude";
+            this.chkDumpBufferOnLowAmplitude.Size = new System.Drawing.Size(166, 17);
+            this.chkDumpBufferOnLowAmplitude.TabIndex = 15;
+            this.chkDumpBufferOnLowAmplitude.Text = "Dump buffer on low amplitude";
+            this.chkDumpBufferOnLowAmplitude.UseVisualStyleBackColor = true;
+            this.chkDumpBufferOnLowAmplitude.CheckedChanged += new System.EventHandler(this.chkDumpBufferOnLowAmplitude_CheckedChanged);
             // 
             // MainForm
             // 
@@ -443,5 +462,6 @@
         private TunerChannelDisplay tunerChannelDisplay4;
         private System.Windows.Forms.CheckBox chkSingleChannelMode;
         private System.Windows.Forms.CheckBox chkFullRangeOnAllChannels;
+        private System.Windows.Forms.CheckBox chkDumpBufferOnLowAmplitude;
     }
 }
