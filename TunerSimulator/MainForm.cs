@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
 using System.Drawing;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -262,10 +263,11 @@ namespace TunerSimulator
                 tr.InstantFrequency,
                 tr.MinSignalFrequency,
                 tr.MaxSignalFrequency);
-            sb.AppendFormat("(expecting: {0}) [{1}, {2}]",
+            sb.AppendFormat(" (expecting: {0}) [{1}, {2}] ( | {3} | )",
                 m_soundOutput.Sample != null ? m_soundOutput.DesiredFrequency.ToString() : "-",
                 tr.MinSignalAmplitude,
-                tr.MaxSignalAmplitude);
+                tr.MaxSignalAmplitude,
+                tr.MaxSignalAmplitude - tr.MinSignalAmplitude);
             sb.Append(SPINNER[m_spinnerIndex]);
             lblReading.Text = sb.ToString();
 
@@ -609,7 +611,7 @@ namespace TunerSimulator
                 return;
             }
 
-            Console.WriteLine("(raw: \"{0}\")", line);
+            //Console.WriteLine("(raw: \"{0}\")", line);
 
             char lineType = line[0];
             line = line.Substring(1);
