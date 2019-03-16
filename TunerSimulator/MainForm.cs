@@ -567,6 +567,7 @@ namespace TunerSimulator
             //    Console.WriteLine(s);
             //}
 
+            spSerial.PortName = File.ReadAllText("comport.txt").Trim();
             spSerial.Handshake = System.IO.Ports.Handshake.None;
             spSerial.Open();
 
